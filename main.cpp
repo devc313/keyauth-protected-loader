@@ -53,7 +53,7 @@ void SetConsoleSize() {
     HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
     SMALL_RECT windowSize = {0, 0, 79, 25}; // 80x26 karakter
     COORD bufferSize = {80, 26};
-    
+
     SetConsoleWindowInfo(hConsole, TRUE, &windowSize);
     SetConsoleScreenBufferSize(hConsole, bufferSize);
 }
@@ -78,7 +78,7 @@ void LoadingAnimation(const std::string& text, int duration_ms) {
     int frame_count = sizeof(frames) / sizeof(frames[0]);
     int frame_duration = 100;
     int total_frames = duration_ms / frame_duration;
-    
+
     for (int i = 0; i < total_frames; i++) {
         std::cout << "\r[" << frames[i % frame_count] << "] " << text;
         Sleep(frame_duration);
@@ -89,8 +89,8 @@ void LoadingAnimation(const std::string& text, int duration_ms) {
 std::string tm_to_readable_time(tm ctx);
 static std::time_t string_to_timet(std::string timestamp);
 static std::tm timet_to_tm(time_t timestamp);
-const std::string compilation_date = (std::string)skCrypt(__DATE__);
-const std::string compilation_time = (std::string)skCrypt(__TIME__);
+const std::string compilation_date = CW_STR(__DATE__).decrypt();
+const std::string compilation_time = CW_STR(__TIME__).decrypt();
 void sessionStatus();
 
 using namespace KeyAuth;
@@ -111,19 +111,19 @@ bool SaveLicenseToRegistry(const std::string& license) {
     HKEY hKey;
     std::string regPath = REGISTRY_PATH.decrypt();
     std::string regKey = REGISTRY_KEY.decrypt();
-    
-    LONG result = RegCreateKeyExA(HKEY_CURRENT_USER, regPath.c_str(), 0, NULL, 
+
+    LONG result = RegCreateKeyExA(HKEY_CURRENT_USER, regPath.c_str(), 0, NULL,
         REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL);
-    
+
     if (result != ERROR_SUCCESS) {
         return false;
     }
 
     std::string encryptedLicense = Security::XorEncrypt(license);
-    result = RegSetValueExA(hKey, regKey.c_str(), 0, REG_SZ, 
+    result = RegSetValueExA(hKey, regKey.c_str(), 0, REG_SZ,
         (const BYTE*)encryptedLicense.c_str(), encryptedLicense.length() + 1);
     RegCloseKey(hKey);
-    
+
     return result == ERROR_SUCCESS;
 }
 
@@ -133,18 +133,18 @@ std::string GetLicenseFromRegistry() { // registryden lisans keyini alıyoruz
     DWORD bufferSize = sizeof(buffer);
     std::string regPath = REGISTRY_PATH.decrypt();
     std::string regKey = REGISTRY_KEY.decrypt();
-    
+
     if (RegOpenKeyExA(HKEY_CURRENT_USER, regPath.c_str(), 0, KEY_READ, &hKey) != ERROR_SUCCESS) {
         return "";
     }
-    
+
     if (RegQueryValueExA(hKey, regKey.c_str(), NULL, NULL, (LPBYTE)buffer, &bufferSize) != ERROR_SUCCESS) {
         RegCloseKey(hKey);
         return "";
     }
-    
+
     RegCloseKey(hKey);
-    return Security::XorDecrypt(std::string(buffer)); 
+    return Security::XorDecrypt(std::string(buffer));
 }
 
 // keyauth api başlatma
@@ -159,7 +159,7 @@ api KeyAuthApp(
 // anti-debug ve anti-dump fonksiyonları
 bool IsDebuggerPresentCheck() {
     if (IsDebuggerPresent()) return true;
-    
+
     BOOL isDebugged = FALSE;
     CheckRemoteDebuggerPresent(GetCurrentProcess(), &isDebugged);
     return isDebugged;
@@ -168,22 +168,22 @@ bool IsDebuggerPresentCheck() {
 bool CheckDebugRegisters() { // debug registerleri kontrol ediyoruz
     CONTEXT ctx = {};
     ctx.ContextFlags = CONTEXT_DEBUG_REGISTERS;
-    
+
     if (!GetThreadContext(GetCurrentThread(), &ctx)) return false;
-    
+
     return (ctx.Dr0 != 0 || ctx.Dr1 != 0 || ctx.Dr2 != 0 || ctx.Dr3 != 0);
 }
 
 bool CheckDebuggerTools() { // debugger araçlarını kontrol ediyoruz
     const wchar_t* debuggerTools[] = {
-        L"ollydbg.exe", L"x64dbg.exe", L"x32dbg.exe",
-        L"ida64.exe", L"ida.exe", L"cheatengine-x86_64.exe",
-        L"HTTPDebuggerUI.exe", L"ProcessHacker.exe", L"procmon.exe"
+        CW_WSTR(L"ollydbg.exe").decrypt(), CW_WSTR(L"x64dbg.exe").decrypt(), CW_WSTR(L"x32dbg.exe").decrypt(),
+        CW_WSTR(L"ida64.exe").decrypt(), CW_WSTR(L"ida.exe").decrypt(), CW_WSTR(L"cheatengine-x86_64.exe").decrypt(),
+        CW_WSTR(L"HTTPDebuggerUI.exe").decrypt(), CW_WSTR(L"ProcessHacker.exe").decrypt(), CW_WSTR(L"procmon.exe").decrypt()
     };
-    
+
     HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (snapshot == INVALID_HANDLE_VALUE) return false;
-    
+
     PROCESSENTRY32W pe32 = {sizeof(pe32)};
     if (Process32FirstW(snapshot, &pe32)) {
         do {
@@ -195,7 +195,7 @@ bool CheckDebuggerTools() { // debugger araçlarını kontrol ediyoruz
             }
         } while (Process32NextW(snapshot, &pe32));
     }
-    
+
     CloseHandle(snapshot);
     return false;
 }
@@ -209,18 +209,18 @@ void AntiDump() { // bellek dökümünü engelleyen fonksiyon
 }
 
 // bellek koruma fonksiyonu
-void ProtectMemory() { 
+void ProtectMemory() {
     HANDLE process = GetCurrentProcess();
     SYSTEM_INFO si;
     GetSystemInfo(&si);
-    
+
     MEMORY_BASIC_INFORMATION mbi;
-    for (LPVOID addr = si.lpMinimumApplicationAddress; 
-         addr < si.lpMaximumApplicationAddress; 
+    for (LPVOID addr = si.lpMinimumApplicationAddress;
+         addr < si.lpMaximumApplicationAddress;
          addr = (LPBYTE)addr + mbi.RegionSize) {
-        
+
         if (VirtualQuery(addr, &mbi, sizeof(mbi))) {
-            if (mbi.State == MEM_COMMIT && 
+            if (mbi.State == MEM_COMMIT &&
                 (mbi.Type == MEM_PRIVATE || mbi.Type == MEM_IMAGE)) {
                 DWORD oldProtect;
                 VirtualProtect(addr, mbi.RegionSize, PAGE_NOACCESS, &oldProtect);
@@ -233,12 +233,13 @@ void ProtectMemory() {
 bool SecurityCheck() {
     if (IsDebuggerPresentCheck()) {
         SetConsoleColor(RED);
-        std::cout << "\n [-] Debugger detected!";
+        auto dbgMsg = CW_STR_STACK("\n [-] Debugger detected!");
+        std::cout << dbgMsg.c_str();
         SetConsoleColor(WHITE);
         Sleep(1500);
         exit(20);
     }
-    
+
     if (CheckDebugRegisters()) {
         SetConsoleColor(RED);
         std::cout << "\n [-] Debug registers detected!";
@@ -246,15 +247,15 @@ bool SecurityCheck() {
         Sleep(1500);
         exit(21);
     }
-    
+
     if (CheckDebuggerTools()) {
         SetConsoleColor(RED);
-        std::cout << "\n [-] Debugging tools detected!"; 
+        std::cout << "\n [-] Debugging tools detected!";
         SetConsoleColor(WHITE);
         Sleep(1500);
         exit(22);
     }
-    
+
     return true;
 }
 
@@ -301,14 +302,14 @@ bool IsVirtualMachine() {
     }
 
     // vm servis kontrolü
-    HANDLE hDevice = CreateFileA("\\\\.\\VmGeneralPort", 
+    HANDLE hDevice = CreateFileA("\\\\.\\VmGeneralPort",
         GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     if (hDevice != INVALID_HANDLE_VALUE) {
         CloseHandle(hDevice);
         return true;
     }
 
-    hDevice = CreateFileA("\\\\.\\VBoxMiniRdrDN", 
+    hDevice = CreateFileA("\\\\.\\VBoxMiniRdrDN",
         GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     if (hDevice != INVALID_HANDLE_VALUE) {
         CloseHandle(hDevice);
@@ -322,14 +323,14 @@ bool IsVirtualMachine() {
         PIP_ADAPTER_INFO pAdapterInfo = adapterInfo;
         while (pAdapterInfo) {
             // vmware mac adresi kontrolü
-            if (pAdapterInfo->Address[0] == 0x00 && 
-                pAdapterInfo->Address[1] == 0x0C && 
+            if (pAdapterInfo->Address[0] == 0x00 &&
+                pAdapterInfo->Address[1] == 0x0C &&
                 pAdapterInfo->Address[2] == 0x29) {
                 return true;
             }
             // virtualBox mac adresi kontrolü
-            if (pAdapterInfo->Address[0] == 0x08 && 
-                pAdapterInfo->Address[1] == 0x00 && 
+            if (pAdapterInfo->Address[0] == 0x08 &&
+                pAdapterInfo->Address[1] == 0x00 &&
                 pAdapterInfo->Address[2] == 0x27) {
                 return true;
             }
@@ -520,11 +521,11 @@ int main()
     if (!Security::AdvancedSecurityCheck()) {
         exit(26);
     }
-    
+
     // zaman senkronizasyonu kontrolü
     Console::SetConsoleColor(Console::DARK_CYAN);
     Console::LoadingAnimation("Checking time synchronization...", 1000);
-    
+
     if (!NTP::CheckTimeSync()) {
         Console::SetConsoleColor(Console::RED);
         std::cout << "\n [-] System time is not synchronized!";
@@ -533,7 +534,7 @@ int main()
         Sleep(3000);
         exit(33);
     }
-    
+
     Console::SetConsoleColor(Console::GREEN);
     std::cout << "\n [+] Time synchronization verified.";
     Console::SetConsoleColor(Console::WHITE);
@@ -552,10 +553,10 @@ int main()
 
     // konsol penceresini ayarla
     Console::SetConsoleSize();
-    
+
     // konsol arkaplan rengini ayarla
     system("color 0F");
-    
+
     // konsol fontunu değiştir
     CONSOLE_FONT_INFOEX cfi;
     cfi.cbSize = sizeof(cfi);
@@ -564,7 +565,7 @@ int main()
     cfi.dwFontSize.Y = 14;
     cfi.FontFamily = FF_MODERN;
     cfi.FontWeight = FW_NORMAL;
-    wcscpy_s(cfi.FaceName, L"Terminal"); 
+    wcscpy_s(cfi.FaceName, L"Terminal");
     SetCurrentConsoleFontEx(GetStdHandle(STD_OUTPUT_HANDLE), FALSE, &cfi);
 
     // logo ve başlık
@@ -578,10 +579,11 @@ int main()
     Console::SetConsoleColor(Console::DARK_CYAN);
     Console::PrintLine('-');
     Console::SetConsoleColor(Console::WHITE);
-    
-    std::string consoleTitle = skCrypt("KeyAuth Loader").decrypt() + compilation_date + " " + compilation_time;
+
+    CW_STACK_STR(loaderPrefix, 'K', 'e', 'y', 'A', 'u', 't', 'h', ' ' , 'L', 'o', 'a', 'd', 'e', 'r');
+    std::string consoleTitle = std::string(loaderPrefix) + " " + compilation_date + " " + compilation_time;
     SetConsoleTitleA(consoleTitle.c_str());
-    
+
     // sunucuya bağlanma
     Console::SetConsoleColor(Console::DARK_CYAN);
     std::cout << "\n";
@@ -602,7 +604,7 @@ int main()
     KeyAuthApp.init();
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-    
+
     if (duration < 100) {
         Console::SetConsoleColor(Console::RED);
         std::cout << "\n [-] Suspicious server response detected!";
@@ -630,7 +632,7 @@ int main()
 
     Console::SetConsoleColor(Console::DARK_CYAN);
     Console::LoadingAnimation("Performing security checks...", 1000);
-    
+
     if (KeyAuthApp.response.message.find("Credit to VaultCord.com") != std::string::npos) {
         Console::SetConsoleColor(Console::RED);
         std::cout << "\n [-] Invalid response signature detected!";
@@ -638,7 +640,7 @@ int main()
         Sleep(1500);
         exit(6);
     }
-    
+
     if (duration < 50 || duration > 5000) {
         Console::SetConsoleColor(Console::RED);
         std::cout << "\n [-] Suspicious response timing detected!";
@@ -646,7 +648,7 @@ int main()
         Sleep(1500);
         exit(7);
     }
-    
+
     if (KeyAuthApp.response.message.empty() || KeyAuthApp.response.message.length() < 10) {
         Console::SetConsoleColor(Console::RED);
         std::cout << "\n [-] Invalid response format detected!";
@@ -660,12 +662,12 @@ int main()
         Console::SetConsoleColor(Console::DARK_CYAN);
         Console::LoadingAnimation("Authenticating license...", 1000);
         Console::SetConsoleColor(Console::WHITE);
-        
+
         start = std::chrono::high_resolution_clock::now();
         KeyAuthApp.license(savedLicense);
         end = std::chrono::high_resolution_clock::now();
         duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-        
+
         if (duration < 100) {
             Console::SetConsoleColor(Console::RED);
             std::cout << "\n [-] Suspicious license verification detected!";
@@ -673,7 +675,7 @@ int main()
             Sleep(1500);
             exit(5);
         }
-        
+
         if (!KeyAuthApp.response.success)
         {
             Console::SetConsoleColor(Console::RED);
@@ -695,11 +697,11 @@ int main()
         Console::SetConsoleColor(Console::WHITE);
         std::string key;
         std::cin >> key;
-        
+
         Console::SetConsoleColor(Console::DARK_CYAN);
         Console::LoadingAnimation("Validating license key...", 1000);
         Console::SetConsoleColor(Console::WHITE);
-        
+
         KeyAuthApp.license(key);
         if (!KeyAuthApp.response.success)
         {
@@ -726,7 +728,7 @@ int main()
     std::thread check(sessionStatus);
 
     if (KeyAuthApp.user_data.username.empty()) exit(10);
-    
+
     while (true) {
         if (KeyAuthApp.user_data.username.empty()) {
             Console::SetConsoleColor(Console::RED);
@@ -750,14 +752,14 @@ int main()
         Console::SetConsoleColor(Console::CYAN);
         std::cout << "\n [1] Load Application";
         std::cout << "\n [0] Exit";
-        
+
         Console::SetConsoleColor(Console::DARK_CYAN);
         std::cout << "\n\n [>] Select option: ";
         Console::SetConsoleColor(Console::WHITE);
-        
+
         int choice;
         std::cin >> choice;
-        
+
         switch (choice) {
             case 1: {
                 if (!KeyAuthApp.response.success || KeyAuthApp.user_data.username.empty()) {
@@ -778,10 +780,10 @@ int main()
                 Console::SetConsoleColor(Console::DARK_CYAN);
                 Console::PrintLine('-');
                 Console::SetConsoleColor(Console::WHITE);
-                
+
                 Console::SetConsoleColor(Console::DARK_CYAN);
                 Console::LoadingAnimation("Preparing application...", 1500);
-                
+
                 if (!KeyAuthApp.response.success || KeyAuthApp.user_data.username.empty()) {
                     Console::SetConsoleColor(Console::RED);
                     std::cout << "\n [-] Session expired! Please restart the application.";
@@ -789,11 +791,11 @@ int main()
                     Sleep(1500);
                     exit(10);
                 }
-                
+
                 Console::SetConsoleColor(Console::GREEN);
                 std::cout << "\n [+] Process completed successfully!";
                 Console::SetConsoleColor(Console::WHITE);
-                
+
                 std::cout << "\n\n Press any key to return to menu...";
                 std::cin.ignore();
                 std::cin.get();

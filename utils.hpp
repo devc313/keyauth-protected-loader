@@ -1,33 +1,34 @@
 #pragma once
-#include <filesystem> 
-#include <string> 
+#include <filesystem>
+#include <string>
 #include <fstream>
 #include "skStr.h"
+#include "secure_literals.hpp"
 #include "json.hpp"
 using json = nlohmann::json;
 
-std::string ReadFromJson(std::string path, std::string section) 
+std::string ReadFromJson(std::string path, std::string section)
 {
 	if (!std::filesystem::exists(path))
-		return skCrypt("File Not Found").decrypt();
+		return CW_STR_LAYERED("File Not Found").decrypt();
 	std::ifstream file(path);
 	json data = json::parse(file);
 	return data[section];
 }
 
-bool CheckIfJsonKeyExists(std::string path, std::string section) 
+bool CheckIfJsonKeyExists(std::string path, std::string section)
 {
 	if (!std::filesystem::exists(path))
-		return skCrypt("File Not Found").decrypt();
+		return CW_STR_LAYERED("File Not Found").decrypt();
 	std::ifstream file(path);
 	json data = json::parse(file);
 	return data.contains(section);
 }
 
-bool WriteToJson(std::string path, std::string name, std::string value, bool userpass, std::string name2, std::string value2) 
+bool WriteToJson(std::string path, std::string name, std::string value, bool userpass, std::string name2, std::string value2)
 {
 	json file;
-	if (!userpass) 
+	if (!userpass)
 	{
 		file[name] = value;
 	}
