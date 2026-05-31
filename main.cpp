@@ -1,4 +1,5 @@
 #include "includes.hpp"
+#include "Project/Protection/AdvancedProtection.h"
 
 // ecvd @ cheatglobal
 // discord: ecvdxd98
@@ -7,7 +8,7 @@
 // release x64 buildlemeniz gerekli
 
 
-// keyauth 1.3 api protected loader
+// keyauth 1.3 api protected loader with advanced Fatality-inspired protections
 
 // konsol renkleri
 enum ConsoleColor {
@@ -601,14 +602,28 @@ bool CheckTimeSync() {
 
 int main()
 {
-    // güvenlik kontrollerini başlat
+    // Initialize advanced protection system (Fatality-inspired)
+    INIT_ADVANCED_PROTECTION();
+    
+    // Enable critical process mode during initialization
+    BEGIN_CRITICAL_SECTION();
+    
+    // Capture environment fingerprint for server binding
+    std::string sessionFingerprint = g_AdvancedProtection.GetSessionFingerprint();
+    
+    // Security checks
     Security::AntiDump();
     if (!Security::SecurityCheck()) {
+        END_CRITICAL_SECTION();
         exit(25);
     }
     if (!Security::AdvancedSecurityCheck()) {
+        END_CRITICAL_SECTION();
         exit(26);
     }
+    
+    // Disable critical mode after sensitive init
+    END_CRITICAL_SECTION();
 
     // zaman senkronizasyonu kontrolü
     Console::SetConsoleColor(Console::DARK_CYAN);
@@ -628,9 +643,13 @@ int main()
     Console::SetConsoleColor(Console::WHITE);
     Sleep(1000);
 
-    // periyodik güvenlik kontrolü için thread başlat
+    // Periodic security and protection update thread
     std::thread securityThread([]() {
         while (true) {
+            // Update advanced protection system (checks environment, pending crashes, etc.)
+            UPDATE_PROTECTION();
+            
+            // Traditional security checks
             if (!Security::SecurityCheck() || !Security::AdvancedSecurityCheck()) {
                 exit(25);
             }
