@@ -1,16 +1,18 @@
 ```
-# Compiled and build artifacts
-*.o
-*.obj
-*.out
+# Build artifacts
+build/
+dist/
 
 # Dependencies
+node_modules/
+venv/
+.venv/
 __pycache__/
+*.egg-info/
 
 # Logs and temp files
 *.log
 *.tmp
-*.swp
 
 # Environment
 .env
@@ -21,32 +23,32 @@ __pycache__/
 .vscode/
 .idea/
 
-# Build directories
-build/
-dist/
-target/
+# OS
+.DS_Store
+Thumbs.db
 
-# Compression files
-*.zip
-*.gz
-*.tar
-*.tgz
-*.bz2
-*.xz
-*.7z
-*.rar
-*.zst
-*.lz4
-*.lzh
-*.cab
-*.arj
-*.rpm
-*.deb
-*.Z
-*.lz
-*.lzo
-*.tar.gz
-*.tar.bz2
-*.tar.xz
-*.tar.zst
+# Compiled files
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.a
+*.out
+*.class
+*.pyc
+
+# Coverage
+coverage/
+htmlcov/
+.coverage
+
+# Package manager caches
+.npm/
+.yarn/
+.pip/
+.mypy_cache/
+.pytest_cache/
+.gradle/
+target/
 ```
