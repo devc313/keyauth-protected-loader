@@ -8,13 +8,13 @@ on:
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: windows-2025
     
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
     - name: Setup MSVC
-      uses: ilammy/msvc-dev-cmd@v1
+      uses: ilammy/msvc-dev-cmd@v2
       
     - name: Configure CMake
       run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=Release
@@ -23,7 +23,7 @@ jobs:
       run: cmake --build ${{github.workspace}}/build --config Release
       
     - name: Upload Artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: protected-loader
         path: ${{github.workspace}}/build/Release/*.exe
@@ -31,7 +31,7 @@ jobs:
         
     - name: Create Release
       if: startsWith(github.ref, 'refs/tags/')
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
         files: ${{github.workspace}}/build/Release/*.exe
       env:
