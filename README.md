@@ -1,111 +1,137 @@
-# 🔒 SecureCore v3.0 - Ultimate Protection Suite
+# 🔐 KeyAuth Protected Loader - Advanced Security Implementation
 
-**Advanced Multi-Layer Obfuscation & Anti-Reverse Engineering Library for C++**
+[![Build Status](https://github.com/yourusername/keyauth-protected-loader/workflows/Build%20Protected%20Loader/badge.svg)](https://github.com/yourusername/keyauth-protected-loader/actions)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/version-2.0-green.svg)](https://github.com/yourusername/keyauth-protected-loader/releases)
 
-## 🚀 Features
+**Güvenli bir KeyAuth entegrasyonu için geliştirilmiş, çok katmanlı korumalı loader uygulaması.**
 
-### 🔐 Cryptographic Engine
-- **9-Layer Hybrid Encryption**: XOR + S-Box + Bit Rotation + Permutation + MAC
-- **Dynamic S-Boxes**: Runtime-generated substitution boxes with entropy
-- **Message Authentication Code (MAC)**: Integrity verification for all encrypted data
-- **Secure Memory Management**: Automatic zeroing of sensitive data
+Bu proje, KeyAuth API'sini kullanan uygulamalar için **gelişmiş güvenlik katmanları** ekleyen bir loader (yükleyici) uygulamasıdır. Reverse engineering, debug, crack ve analiz araçlarına karşı çoklu koruma mekanizmaları içerir.
 
-### 🛡️ Advanced Anti-Debug (Checkpoint & XAntiDebug Inspired)
-1. `IsDebuggerPresent()` - Standard API check
-2. `CheckRemoteDebuggerPresent()` - Hidden debugger detection
-3. `NtQueryInformationProcess(ProcessDebugPort)` - Port check
-4. `NtQueryInformationProcess(ProcessDebugFlags)` - Flags check
-5. `NtQueryInformationProcess(ProcessBreakOnTermination)` - Termination break
-6. `OutputDebugString Trap` - Exception-based detection
-7. **RDTSC Timing Attack** - Detects step-over/step-into delays
-8. **Hidden Thread Detection** - Thread list anomaly checks
-9. **Parent Process Verification** - Spoofing detection
+## ⚠️ Önemli Not
 
-### 🖥️ System Integrity (Kernel Process Protector Logic)
-- **Privilege Stripping**: Removes SeDebugPrivilege from token
-- **Crack Tool Detection**: Scans for x64dbg, IDA, CheatEngine, etc.
-- **Hosts File Monitoring**: Detects modifications (>1KB threshold)
-- **Proxy Detection**: Checks IE proxy configuration
-- **VM/Sandbox Detection**: VMware, VirtualBox, VBOX artifacts
+Bu bir **koruma kütüphanesi değil**, KeyAuth entegrasyonlu **güvenli bir loader uygulamasıdır**. Uygulamanızı çalıştırmadan önce güvenlik kontrolleri yapar, şifrelenmiş iletişim kurar ve yetkisiz erişimleri engeller.
 
-### 🔗 KeyAuth Integration
-- **HWID Generation**: Volume serial + CPU ID binding
-- **Initialization Vector (IV)**: Random IV per request
-- **SSL Pinning Ready**: Certificate hash verification structure
-- **Encrypted Payloads**: All API calls encrypted before transmission
+## 🚀 Özellikler
 
-### 🎭 Compile-Time Obfuscation (Oxorany/Cloakwork)
-- **String Encryption**: All strings obfuscated at compile-time
-- **Opaque Predicates**: Control flow flattening
-- **Random Seeds**: Based on `__TIME__` and `__COUNTER__`
-- **No Static Strings**: Nothing readable in binary
+### 🔒 Çok Katmanlı Şifreleme
+- **9-Katmanlı Hibrit Şifreleme**: XOR + S-Box + Bit Rotation + Permutation + MAC
+- **Compile-Time String Obfuscation**: Oxorany benzeri tekniklerle derleme zamanında string şifreleme
+- **SecureString Class**: Hassas veriler için otomatik şifreleme/deşifreleme
+- **HMAC Benzeri MAC**: Veri bütünlüğü doğrulama
 
----
+### 🛡️ Anti-Debug & Anti-Analysis
+- **Checkpoint Anti-Debug Teknikleri**: Timing-based detection, PEB analizi
+- **Kernel-Level Protection**: Process koruma mekanizmaları
+- **Breakpoint Detection**: INT3, hardware breakpoint taraması
+- **Timing Attack Detection**: Debugger kaynaklı gecikmeleri algılama
+- **VM Detection**: VMware, VirtualBox, QEMU tespiti
+- **Emulator Detection**: Bochs, DOSBox tespiti
 
-## 📦 Installation
+### 🔍 Sistem Bütünlüğü Kontrolleri
+- **Hosts File Check**: Modified hosts dosyası tespiti
+- **Proxy Detection**: Sistem proxy ayarları kontrolü
+- **Registry Integrity**: Lisans anahtarı güvenliği
+- **Process Scanning**: Cheat Engine, x64dbg, IDA Pro gibi araçların tespiti
+- **Code Integrity**: CRC64 ile kod bütünlüğü doğrulama
 
-1. Copy `SecureCore.h` to your project directory
-2. Include in your main file:
-```cpp
-#include "SecureCore.h"
-```
-3. Link required libraries (auto-included via pragma):
-   - `bcrypt.lib`
-   - `winhttp.lib`
-   - `ntdll.lib`
-   - `dbghelp.lib`
+### 🔐 SSL Pinning & Güvenli İletişim
+- **Certificate Pinning**: KeyAuth.win sertifikaları sabitlenmiş
+  - Sertifika Hash: `d7864f2520cef30934c873a7bf6e10be414ec6ae9c45d35b39b319879ed9f9ca`
+  - Public Key Hash: `07d6fed49881218506064dba779b903405d56cc7826a24b15c763cc64ab98356`
+- **Secure HTTP Requests**: WinHTTP ile güvenli API iletişimi
+- **Man-in-the-Middle Koruması**: SSL stripping saldırılarına karşı koruma
 
----
+### 🎯 Control Flow Obfuscation
+- **Control Flow Flattening**: Cloakwork benzeri akış düzleştirme
+- **Opaque Predicates**: Compiler optimizasyonlarını atlatan koşullar
+- **Dead Code Insertion**: Analizi zorlaştıran ölü kod blokları
 
-## 💻 Usage Example
+## 📦 Kurulum
 
-### Basic Initialization
-```cpp
-#include "SecureCore.h"
+### Gereksinimler
+- Windows 10/11
+- Visual Studio 2019 veya üzeri (MSVC)
+- CMake 3.15+
+- KeyAuth hesabı ve uygulama anahtarları
 
-int main() {
-    // Initialize all security checks
-    SECURE_INIT();
-    
-    // Your protected code here
-    PROTECTED_BLOCK({
-        std::cout << "Application running securely!" << std::endl;
-    });
-    
-    return 0;
-}
+### Manuel Derleme
+
+```bash
+# Repoyu klonla
+git clone https://github.com/yourusername/keyauth-protected-loader.git
+cd keyauth-protected-loader
+
+# CMake ile build
+mkdir build && cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release
+cmake --build . --config Release
 ```
 
-### KeyAuth Integration
+### GitHub Actions ile Otomatik Build
+
+Proje, GitHub Actions kullanarak otomatik olarak derlenir:
+- Her push işlemi için Windows-latest üzerinde build
+- Release artifact olarak EXE çıktısı
+- Tag oluşturulduğunda otomatik release oluşturma
+
+Build dosyaları **Actions** sekmesinden veya **Releases** sayfasından indirilebilir.
+
+## 🔧 Yapılandırma
+
+### KeyAuth Ayarları
+
+`main.cpp` dosyasında kendi KeyAuth bilgilerinizi girin:
+
+```cpp
+// main.cpp içinde
+keyauth_data.name = SECURE_STR("YOUR_APP_NAME");
+keyauth_data.ownerid = SECURE_STR("YOUR_OWNER_ID");
+keyauth_data.secret = SECURE_STR("YOUR_APP_SECRET");
+keyauth_data.version = SECURE_STR("1.0");
+keyauth_data.url = SECURE_STR("https://keyauth.win/api/1.2/");
+```
+
+### Güvenlik Seviyesi Ayarlama
+
+```cpp
+// Güvenlik kontrollerini özelleştir
+#define ENABLE_DEBUG_CHECK      true
+#define ENABLE_VM_CHECK         true
+#define ENABLE_HOSTS_CHECK      true
+#define ENABLE_PROXY_CHECK      true
+#define ENABLE_PROCESS_SCAN     true
+```
+
+## 📖 Kullanım
+
+### Temel Kullanım
+
 ```cpp
 #include "SecureCore.h"
+#include "KeyAuthManager.h"
 
 int main() {
-    SECURE_INIT();
+    // 1. Güvenlik motorunu başlat
+    SECURE_INIT("YourMasterSecretKey123!");
     
-    KeyAuth::Client client;
+    // 2. Güvenlik kontrollerini çalıştır
+    CHECK_SECURITY();
     
-    // Initialize with obfuscated strings
-    client.Init(
-        SECURE_STR("YourAppName"),
-        SECURE_STR("YourOwnerID"),
-        SECURE_STR("YourSecret"),
-        SECURE_STR("1.0")
-    );
+    // 3. KeyAuth yöneticisini başlat
+    KeyAuthManager auth;
     
-    // Protected login
-    PROTECTED_BLOCK({
-        auto resp = client.Login(
-            SECURE_STR("username"),
-            SECURE_STR("password")
-        );
-        
-        if (resp.success) {
-            std::cout << "Session: " << resp.session_id << std::endl;
-            std::cout << "HWID: " << resp.hwid << std::endl;
-        } else {
-            std::cout << "Error: " << resp.message << std::endl;
-            ExitProcess(0);
+    if (!auth.Initialize()) {
+        MessageBoxA(NULL, "Başlatma başarısız!", "Hata", MB_ICONERROR);
+        return 1;
+    }
+    
+    // 4. Korunan alanda çalıştır
+    RUN_PROTECTED({
+        // Login işlemleri
+        if (auth.Login(username, password)) {
+            // Başarılı login sonrası işlemler
+            RunApplication();
         }
     });
     
@@ -113,119 +139,119 @@ int main() {
 }
 ```
 
-### Custom Security Checks
+### Güvenli String Kullanımı
+
 ```cpp
-// Run specific checks manually
-if (AntiDebug::CheckTiming()) {
-    // Timing anomaly detected
+// String'ler otomatik olarak obfuscate edilir
+std::string apiUrl = SECURE_STR("https://api.example.com/endpoint");
+std::string secretKey = SECURE_STR("super-secret-key-123");
+
+// Runtime'da çözülür, kullanıldıktan sonra bellekten silinir
+```
+
+### Özel Güvenlik Kontrolleri
+
+```cpp
+// Debugger kontrolü
+if (SecurityChecker::IsDebuggerPresent_Advanced()) {
+    // Logger'a kaydet veya sessizce çık
     ExitProcess(0);
 }
 
-if (SystemIntegrity::CheckCrackTools()) {
-    // Cracking tool detected
+// VM kontrolü
+if (SecurityChecker::IsVirtualMachine()) {
+    // Farklı davranış sergile
+    ShowFakeError();
     ExitProcess(0);
 }
 
-if (SystemIntegrity::IsVM()) {
-    // Virtual machine detected
+// Hosts dosyası kontrolü
+if (SecurityChecker::IsHostsModified()) {
+    // DNS hijacking denemesi
     ExitProcess(0);
 }
 ```
 
----
+## 🔬 Teknik Detaylar
 
-## 🔧 Configuration
+### Şifreleme Katmanları
 
-### SSL Pinning (KeyAuth Certificates)
-Update certificate hashes in `SSLPinning` class:
+1. **Layer 1**: XOR with Cryptographically Secure Key Stream
+2. **Layer 2**: S-Box Substitution (AES-inspired)
+3. **Layer 3**: Bit Rotation Left (3 bits)
+4. **Layer 4**: XOR with Inverted Key
+5. **Layer 5**: Data Permutation
+6. **Layer 6**: Second S-Box Substitution
+7. **Layer 7**: Conditional Bit Flipping
+8. **Layer 8**: Final Bit Rotation Right (2 bits)
+9. **Layer 9**: HMAC-SHA256 benzeri MAC Tag Ekleme
+
+### Derlenen String Obfuscation
+
 ```cpp
-// KeyAuth.win certificates
-const char* CERT_HASH = "d7864f2520cef30934c873a7bf6e10be414ec6ae9c45d35b39b319879ed9f9ca";
-const char* PUB_KEY_HASH = "07d6fed49881218506064dba779b903405d56cc7826a24b15c763cc64ab98356";
+// Derleme zamanında __TIME__ seed'i ile şifreleme
+#define OBFUSCATE(str) []() { \
+    constexpr auto key = []() { /* compile-time hash */ }(); \
+    /* XOR encryption with key */ \
+}()
 ```
 
-### Custom Crack Tool List
-Add more tools to detect in `SystemIntegrity::CheckCrackTools()`:
-```cpp
-const char* badNames[] = {
-    "x64dbg", "x32dbg", "ida", "ollydbg", 
-    "cheatengine", "processhacker", "wireshark",
-    "fiddler", "httpdebugger", "dnspy", "ghidra",
-    "your_custom_tool_here" // Add yours
-};
-```
+### Anti-Debug Teknikleri
+
+- **Timing-Based Detection**: RDTSC/RDTSCP ile instruction timing
+- **PEB Analysis**: Process Environment Block debugging flags
+- **Hardware Breakpoints**: DR0-DR7 register kontrolü
+- **INT3 Detection**: Memory'de 0xCC byte'ları taraması
+- **Parent Process Verification**: Explorer.exe dışındaki ebeveynler
+- **Window Title Scanning**: Debug tool pencere başlıkları
+
+## 🛡️ Güvenlik En İyi Uygulamaları
+
+1. **Anahtar Yönetimi**: Master key'leri asla kaynak kodda plaintext olarak saklamayın
+2. **Katmanlı Savunma**: Tek bir korumaya güvenmeyin, çoklu katman kullanın
+3. **Güncellemeler**: Düzenli olarak güvenlik kontrollerini güncelleyin
+4. **Monitoring**: Şüpheli aktiviteleri loglayın ve raporlayın
+5. **Obfuscation**: Tüm hassas string'leri obfuscate edin
+
+## ⚠️ Yasal Uyarı
+
+Bu yazılım yalnızca **eğitim ve yasal amaçlar** içindir. Geliştiriciler, bu kodu yalnızca kendi uygulamalarını korumak için kullanmalıdır. İzinsiz reverse engineering, crack oluşturma veya kötü amaçlı kullanım yasaktır.
+
+## 📄 Lisans
+
+Bu proje MIT lisansı altında lisanslanmıştır. Detaylar için [LICENSE](LICENSE) dosyasına bakın.
+
+## 🤝 Katkıda Bulunma
+
+Katkılarınızı bekliyoruz! Lütfen şu adımları izleyin:
+
+1. Projeyi fork edin
+2. Feature branch oluşturun (`git checkout -b feature/amazing-feature`)
+3. Değişikliklerinizi commit edin (`git commit -m 'Add amazing feature'`)
+4. Branch'inizi push edin (`git push origin feature/amazing-feature`)
+5. Pull Request açın
+
+## 🐛 Sorun Bildirimi
+
+Bir hata bulursanız veya güvenlik açığı tespit ederseniz, lütfen [Issues](https://github.com/yourusername/keyauth-protected-loader/issues) bölümünden bildirin. Güvenlik açıklarını halka açık şekilde paylaşmadan önce özel olarak bildirmenizi rica ederiz.
+
+## 📚 Kaynaklar
+
+Bu proje aşağıdaki açık kaynak projelerden ilham almıştır:
+
+- [obfusheader.h](https://github.com/ac3ss0r/obfusheader.h) - Compile-time obfuscation
+- [oxorany](https://github.com/llxiaoyuan/oxorany) - String encryption
+- [Cloakwork](https://github.com/ck0i/Cloakwork) - Control flow flattening
+- [XAntiDebug](https://github.com/strivexjun/XAntiDebug) - Anti-debug techniques
+- [KeyAuth CPP Example](https://github.com/KeyAuth/KeyAuth-CPP-Example) - Official KeyAuth integration
+- [Checkpoint Anti-Debug](https://anti-debug.checkpoint.com/) - Advanced anti-debug research
+
+## 📬 İletişim
+
+- **GitHub**: [@yourusername](https://github.com/yourusername)
+- **Discord**: [Community Server](https://discord.gg/yourserver)
+- **Email**: your.email@example.com
 
 ---
 
-## 🏗️ Architecture
-
-### MultiLayerCipher (9 Layers)
-1. **XOR with Key Stream** - Basic confusion
-2. **S-Box Substitution** - Non-linear transformation
-3. **Left Rotate 3 bits** - Bit diffusion
-4. **Inverted Key XOR** - Additional layer
-5. **Permutation (Reverse)** - Position shuffling
-6. **Second S-Box** - Enhanced confusion
-7. **Bit Flip Pattern** - Conditional XOR
-8. **Right Rotate 2 bits** - Final diffusion
-9. **MAC Tag** - Integrity verification
-
-### SecureString Class
-- Generates unique 32-byte random key per instance
-- Encrypts string immediately on construction
-- Decrypts only when `.Get()` is called
-- Automatically zeroes memory on destruction
-
-### AntiDebug Class
-- Wraps 8+ different detection methods
-- `RunAllChecks()` executes comprehensive scan
-- Individual methods available for granular control
-
-### SystemIntegrity Class
-- Privilege management (strip debug rights)
-- Process scanning (crack tools)
-- Network tamper detection (hosts/proxy)
-- VM artifact detection (registry keys)
-
----
-
-## ⚠️ Important Notes
-
-1. **False Positives**: Some anti-debug checks may trigger on legitimate debugging tools. Test thoroughly.
-2. **Performance**: Timing checks add minimal overhead but run frequently in protected blocks.
-3. **Admin Rights**: Privilege stripping requires appropriate token permissions.
-4. **Network**: Proxy/Hosts checks require file system access permissions.
-5. **Production**: Replace mock KeyAuth implementation with actual API calls using WinHTTP + AES.
-
----
-
-## 📚 References
-
-This library integrates techniques from:
-- [Checkpoint Anti-Debug](https://anti-debug.checkpoint.com/)
-- [Windows Kernel Process Protector](https://github.com/Rhydon1337/windows-kernel-process-protector)
-- [XAntiDebug](https://github.com/strivexjun/XAntiDebug)
-- [obfusheader.h](https://github.com/ac3ss0r/obfusheader.h)
-- [oxorany](https://github.com/llxiaoyuan/oxorany)
-- [Cloakwork](https://github.com/ck0i/Cloakwork)
-- [KeyAuth CPP Example](https://github.com/KeyAuth/KeyAuth-CPP-Example)
-
----
-
-## 📄 License
-
-MIT License - Free for personal and commercial use.
-
----
-
-## 🤝 Contributing
-
-Feel free to submit PRs with:
-- New anti-debug techniques
-- Improved encryption layers
-- Better obfuscation macros
-- Additional VM detection methods
-
----
-
-**Built with ❤️ for the security community**
+**⚠️ Unutmayın**: Hiçbir güvenlik sistemi %100 kırılmaz değildir. Bu loader, reverse engineering'i zorlaştırmak ve saldırganların işini güçleştirmek için tasarlanmıştır. Derinlemesine savunma stratejisi uygulayın.
