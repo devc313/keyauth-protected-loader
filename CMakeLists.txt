@@ -1,4 +1,10 @@
 cmake_minimum_required(VERSION 3.15)
+
+# Platform check - This project is Windows-only
+if(NOT WIN32)
+    message(FATAL_ERROR "This project is Windows-only and cannot be built on Linux/Unix systems. Please use Visual Studio on Windows.")
+endif()
+
 project(KeyAuthProtectedLoader VERSION 2.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
