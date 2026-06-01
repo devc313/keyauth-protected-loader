@@ -4,13 +4,45 @@
 #include <vector>
 #include <cstdint>
 #include <cstring>
+#include <memory>
+#include <atomic>
 
+// ============================================================================
+// SECURITY CONSTANTS - Magic numbers replaced with named constants
+// ============================================================================
 namespace Security {
-    // Çok katmanlı şifreleme için sabitler
+    // Encryption constants
     constexpr size_t XOR_KEY_COUNT = 4;
     constexpr size_t MAX_XOR_KEY_SIZE = 32;
     constexpr size_t HMAC_KEY_SIZE = 32;
     constexpr size_t IV_SIZE = 16;
+    constexpr size_t AES_BLOCK_SIZE = 16;
+    
+    // Anti-debug timing thresholds (milliseconds)
+    constexpr DWORD TIMING_THRESHOLD_NORMAL = 100;
+    constexpr DWORD TIMING_THRESHOLD_STRICT = 50;
+    constexpr DWORD TIMING_CHECK_INTERVAL = 5000;
+    
+    // Security check intervals (milliseconds)
+    constexpr DWORD DEBUG_CHECK_INTERVAL = 5000;
+    constexpr DWORD VM_CHECK_INTERVAL = 30000;
+    constexpr DWORD INTEGRITY_CHECK_INTERVAL = 10000;
+    
+    // VM Detection constants
+    constexpr int CPUID_HYPERVISOR_BIT = 31;
+    constexpr int CPUID_FEATURE_INFO = 1;
+    constexpr int CPUID_VENDOR_INFO = 0;
+    
+    // Memory protection flags
+    constexpr DWORD PROTECTED_MEMORY_FLAGS = PAGE_READONLY;
+    constexpr DWORD ENCRYPTED_MEMORY_FLAGS = PAGE_READWRITE;
+    
+    // Exit codes for security violations
+    constexpr int EXIT_DEBUGGER_DETECTED = 30;
+    constexpr int EXIT_VM_DETECTED = 31;
+    constexpr int EXIT_TIME_MANIPULATION = 32;
+    constexpr int EXIT_INTEGRITY_FAILURE = 33;
+    constexpr int EXIT_EXCEPTION_DEBUG = 34;
     
     // Dinamik XOR anahtarları (runtime'da oluşturulur)
     struct EncryptionKeys {
@@ -171,29 +203,53 @@ namespace Security {
     // Ana güvenlik kontrolü
     bool SecurityCheck();
 
-    // Antidebug fonksiyonları
+    // ========================================================================
+    // ANTI-DEBUG FUNCTIONS - Enhanced with NtQueryInformationProcess, timing, exceptions
+    // ========================================================================
     bool IsDebuggerPresentCheck();
     bool CheckDebugRegisters();
     bool CheckDebuggerTools();
     bool CheckTimingAttack();
     bool CheckBreakpoints();
     
-    // Antidump fonksiyonları
-    void AntiDump();
-    void ProtectCriticalMemory();
-    void EncryptCodeSection();
+    // Advanced anti-debug techniques
+    bool NtQueryInformationProcessCheck();      // PEB-based detection
+    bool TimingBasedAntiDebug();                 // RDTSC timing analysis
+    bool ExceptionBasedAntiDebug();              // SEH/VEH exception handling
+    bool HardwareBreakpointCheck();              // DR0-DR7 register check
+    bool SoftwareInterruptCheck();               // INT3 (0xCC) detection
     
-    // Antivm fonksiyonları
+    // ========================================================================
+    // ANTI-VM FUNCTIONS - Enhanced with registry, driver, CPUID hypervisor
+    // ========================================================================
     bool IsVirtualMachine();
     bool CheckVMArtifacts();
     
-    // Kod bütünlüğü kontrolü
+    // Advanced VM detection
+    bool CPUIDHypervisorDetection();             // CPUID leaf 1 hypervisor bit
+    bool RegistryArtifactCheck();                // VM-specific registry keys
+    bool DriverPresenceCheck();                  // VM driver detection
+    bool MACAddressCheck();                      // VMware/VirtualBox MAC prefixes
+    bool BIOSVendorCheck();                      // BIOS manufacturer check
+    bool ACPI_TABLE_Check();                     // ACPI table inspection
+    
+    // ========================================================================
+    // CODE INTEGRITY & MEMORY PROTECTION
+    // ========================================================================
     bool VerifyCodeIntegrity();
     bool CalculateAndVerifyChecksum();
     
-    // Gelişmiş güvenlik kontrolleri
+    // RAII-based memory protection
+    class MemoryProtector;
+    
+    // ========================================================================
+    // ADVANCED SECURITY & MONITORING
+    // ========================================================================
     bool AdvancedSecurityCheck();
     bool ContinuousSecurityMonitor();
+    
+    // Exception handler for anti-debug
+    LONG NTAPI ExceptionHandler(PEXCEPTION_POINTERS ExceptionInfo);
     
     // Checksum hesaplama
     DWORD CalculateChecksum(const std::vector<BYTE>& data);
@@ -203,4 +259,88 @@ namespace Security {
     void SecureZeroMemory(void* ptr, size_t size);
     void* SecureAlloc(size_t size);
     void SecureFree(void* ptr, size_t size);
-} 
+    
+    // ========================================================================
+    // AES-NI HARDWARE ACCELERATION (Performance optimization)
+    // ========================================================================
+    #ifdef __AVX2__
+    std::string AES_NI_Encrypt(const std::string& input, const unsigned char* key);
+    std::string AES_NI_Decrypt(const std::string& input, const unsigned char* key);
+    bool HasAES_NI_Support();
+    #endif
+    
+    // ========================================================================
+    // RAII MEMORY PROTECTOR CLASS - Automatic memory protection management
+    // ========================================================================
+    class MemoryProtector {
+    private:
+        void* m_address;
+        SIZE_T m_size;
+        DWORD m_oldProtect;
+        bool m_isProtected;
+        
+    public:
+        MemoryProtector() : m_address(nullptr), m_size(0), m_oldProtect(0), m_isProtected(false) {}
+        
+        explicit MemoryProtector(void* address, SIZE_T size, DWORD newProtect) 
+            : m_address(address), m_size(size), m_oldProtect(0), m_isProtected(false) {
+            if (address && size > 0) {
+                m_isProtected = VirtualProtect(address, size, newProtect, &m_oldProtect);
+            }
+        }
+        
+        ~MemoryProtector() {
+            release();
+        }
+        
+        // Disable copy
+        MemoryProtector(const MemoryProtector&) = delete;
+        MemoryProtector& operator=(const MemoryProtector&) = delete;
+        
+        // Enable move
+        MemoryProtector(MemoryProtector&& other) noexcept 
+            : m_address(other.m_address), m_size(other.m_size), 
+              m_oldProtect(other.m_oldProtect), m_isProtected(other.m_isProtected) {
+            other.m_address = nullptr;
+            other.m_size = 0;
+            other.m_isProtected = false;
+        }
+        
+        MemoryProtector& operator=(MemoryProtector&& other) noexcept {
+            if (this != &other) {
+                release();
+                m_address = other.m_address;
+                m_size = other.m_size;
+                m_oldProtect = other.m_oldProtect;
+                m_isProtected = other.m_isProtected;
+                other.m_address = nullptr;
+                other.m_size = 0;
+                other.m_isProtected = false;
+            }
+            return *this;
+        }
+        
+        bool protect(DWORD newProtect) {
+            if (!m_address || m_size == 0) return false;
+            if (m_isProtected) return true;
+            
+            m_isProtected = VirtualProtect(m_address, m_size, newProtect, &m_oldProtect);
+            return m_isProtected;
+        }
+        
+        void release() {
+            if (m_isProtected && m_address) {
+                DWORD dummy;
+                VirtualProtect(m_address, m_size, m_oldProtect, &dummy);
+                m_isProtected = false;
+            }
+        }
+        
+        bool isProtected() const { return m_isProtected; }
+        void* getAddress() const { return m_address; }
+        SIZE_T getSize() const { return m_size; }
+    };
+    
+    // Smart pointer type for MemoryProtector
+    using MemoryProtectorPtr = std::unique_ptr<MemoryProtector>;
+}
