@@ -8,6 +8,7 @@
 
 #include <windows.h>
 #include <winternl.h>
+#include <string>
 
 #ifndef PROCESS_BREAKAWAY_OK
 #define PROCESS_BREAKAWAY_OK 0x0200

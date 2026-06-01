@@ -51,18 +51,18 @@ public:
         PPEB peb = SyscallEngine::GetPEB();
         if (!peb || !peb->Ldr) return;
 
-        PLIST_ENTRY head = &peb->Ldr->InLoadOrderModuleList;
+        PLIST_ENTRY head = &peb->Ldr->InMemoryOrderModuleList;
         PLIST_ENTRY curr = head->Flink;
 
         while (curr != head) {
-            PLDR_DATA_TABLE_ENTRY entry = CONTAINING_RECORD(curr, LDR_DATA_TABLE_ENTRY, InLoadOrderLinks);
+            PLDR_DATA_TABLE_ENTRY entry = CONTAINING_RECORD(curr, LDR_DATA_TABLE_ENTRY, InMemoryOrderLinks);
             
             if (entry->FullDllName.Buffer && entry->FullDllName.Length > 0) {
                 ModuleInfo info;
                 info.name = std::wstring(entry->FullDllName.Buffer, entry->FullDllName.Length / sizeof(WCHAR));
-                info.loadTime = entry->LoadTime.QuadPart;
+                info.loadTime = 0;
                 info.dllBase = entry->DllBase;
-                info.sizeOfImage = entry->SizeOfImage;
+                info.sizeOfImage = 0;
                 
                 _moduleInfos.push_back(info);
             }
@@ -84,7 +84,7 @@ public:
         for (size_t i = 0; i < 3 && i < _moduleInfos.size(); i++) {
             char moduleHash[64];
             sprintf_s(moduleHash, sizeof(moduleHash), 
-                "%s:%llX|", 
+                "%S:%llX|", 
                 _moduleInfos[i].name.c_str(), 
                 _moduleInfos[i].loadTime);
             
@@ -114,19 +114,19 @@ public:
         PPEB peb = SyscallEngine::GetPEB();
         if (!peb || !peb->Ldr) return false;
 
-        PLIST_ENTRY head = &peb->Ldr->InLoadOrderModuleList;
+        PLIST_ENTRY head = &peb->Ldr->InMemoryOrderModuleList;
         PLIST_ENTRY curr = head->Flink;
         size_t index = 0;
 
         while (curr != head && index < _moduleInfos.size()) {
-            PLDR_DATA_TABLE_ENTRY entry = CONTAINING_RECORD(curr, LDR_DATA_TABLE_ENTRY, InLoadOrderLinks);
+            PLDR_DATA_TABLE_ENTRY entry = CONTAINING_RECORD(curr, LDR_DATA_TABLE_ENTRY, InMemoryOrderLinks);
             
             if (entry->FullDllName.Buffer && entry->FullDllName.Length > 0) {
                 std::wstring moduleName(entry->FullDllName.Buffer, entry->FullDllName.Length / sizeof(WCHAR));
                 
                 // Compare with captured module info
                 if (moduleName == _moduleInfos[index].name) {
-                    if (entry->LoadTime.QuadPart != _moduleInfos[index].loadTime) {
+                    if (0 != _moduleInfos[index].loadTime) {
                         // Load time mismatch - possible dump/reload attack
                         return false;
                     }

@@ -8,6 +8,8 @@
 
 #include <windows.h>
 #include <cstdint>
+#include <string>
+#include <vector>
 #include <unordered_map>
 #include <functional>
 #include <random>

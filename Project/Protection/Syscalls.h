@@ -64,40 +64,52 @@ private:
         0xC3                        // ret
     };
 
-    template<typename T>
-    static T ExecuteSyscall(ULONG syscallNumber, T... args) {
-        // Create executable memory for the stub
+    // ExecuteSyscall template commented out: the original used T as both a
+    // return type and a parameter pack, which is invalid C++.  Additionally,
+    // casting stack-allocated shellcode to a function pointer is UB and will
+    // be blocked by DEP.  A production implementation should use VirtualAlloc
+    // with PAGE_EXECUTE_READWRITE or a separate .asm stub.
+    /*
+    template<typename Ret, typename... Args>
+    static Ret ExecuteSyscall(ULONG syscallNumber, Args... args) {
         unsigned char shellcode[sizeof(SyscallStub)];
         memcpy(shellcode, SyscallStub, sizeof(SyscallStub));
-        
-        // Patch the syscall number
         *(PULONG)(shellcode + 3) = syscallNumber;
-
-        // Cast to function pointer and execute
-        using FuncType = T(__stdcall*)(...);
+        using FuncType = Ret(__stdcall*)(Args...);
         FuncType func = (FuncType)shellcode;
-        
         return func(args...);
     }
+    */
 
 public:
     static NTSTATUS ReadVirtualMemory(HANDLE hProcess, PVOID baseAddr, PVOID buffer, SIZE_T size, PSIZE_T bytesRead) {
-        // Note: Real implementation requires careful stack manipulation for arguments
-        // This is a simplified wrapper concept. For production, use assembly stubs.
-        // Here we fallback to standard API if direct syscall stubbing is too complex for this snippet
-        // but in a real scenario, you would use the ExecuteSyscall logic above with proper register setup.
-        
-        // Placeholder for actual syscall execution logic
-        // In a real scenario, we would construct the stack frame manually or use inline asm
-        return NtReadVirtualMemory(hProcess, baseAddr, buffer, size, bytesRead);
+        static NtReadVirtualMemory_t pFunc = nullptr;
+        if (!pFunc) {
+            HMODULE hNtdll = GetModuleHandleA("ntdll.dll");
+            if (hNtdll) pFunc = (NtReadVirtualMemory_t)GetProcAddress(hNtdll, "NtReadVirtualMemory");
+        }
+        if (pFunc) return pFunc(hProcess, baseAddr, buffer, size, bytesRead);
+        return (NTSTATUS)0xC0000001; // STATUS_UNSUCCESSFUL
     }
 
     static NTSTATUS WriteVirtualMemory(HANDLE hProcess, PVOID baseAddr, PVOID buffer, SIZE_T size, PSIZE_T bytesWritten) {
-        return NtWriteVirtualMemory(hProcess, baseAddr, buffer, size, bytesWritten);
+        static NtWriteVirtualMemory_t pFunc = nullptr;
+        if (!pFunc) {
+            HMODULE hNtdll = GetModuleHandleA("ntdll.dll");
+            if (hNtdll) pFunc = (NtWriteVirtualMemory_t)GetProcAddress(hNtdll, "NtWriteVirtualMemory");
+        }
+        if (pFunc) return pFunc(hProcess, baseAddr, buffer, size, bytesWritten);
+        return (NTSTATUS)0xC0000001; // STATUS_UNSUCCESSFUL
     }
 
     static NTSTATUS ProtectVirtualMemory(HANDLE hProcess, PVOID* baseAddr, PSIZE_T regionSize, ULONG newProtect, PULONG oldProtect) {
-        return NtProtectVirtualMemory(hProcess, baseAddr, regionSize, newProtect, oldProtect);
+        static NtProtectVirtualMemory_t pFunc = nullptr;
+        if (!pFunc) {
+            HMODULE hNtdll = GetModuleHandleA("ntdll.dll");
+            if (hNtdll) pFunc = (NtProtectVirtualMemory_t)GetProcAddress(hNtdll, "NtProtectVirtualMemory");
+        }
+        if (pFunc) return pFunc(hProcess, baseAddr, regionSize, newProtect, oldProtect);
+        return (NTSTATUS)0xC0000001; // STATUS_UNSUCCESSFUL
     }
     
     // Helper to get PEB address without calling API (using GS segment)

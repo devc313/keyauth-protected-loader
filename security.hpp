@@ -66,23 +66,7 @@ namespace Security {
         0x17, 0x2b, 0x04, 0x7e, 0xba, 0x77, 0xd6, 0x26, 0xe1, 0x69, 0x14, 0x63, 0x55, 0x21, 0x0c, 0x7d
     };
     
-    // Çok katmanlı şifreleme anahtarları (runtime generated)
-    struct EncryptionKeys {
-        BYTE hmacKey[HMAC_KEY_SIZE];
-        BYTE xorKeys[8][MAX_XOR_KEY_SIZE]; // 8 katmanlı XOR için
-        
-        EncryptionKeys() {
-            SecureRandom::Generate(HMAC_KEY_SIZE).copy(hmacKey, HMAC_KEY_SIZE);
-            for (int i = 0; i < 8; i++) {
-                auto key = SecureRandom::Generate(MAX_XOR_KEY_SIZE);
-                key.copy(xorKeys[i], MAX_XOR_KEY_SIZE);
-            }
-        }
-    };
-    
-    static EncryptionKeys g_keys;
-    
-    // Güvenli Rastgele Sayı Üretici (CNG)
+    // Güvenli Rastgele Sayı Üretici (CNG) - Must be declared before EncryptionKeys
     class SecureRandom {
     public:
         static std::vector<BYTE> Generate(size_t length) {
@@ -112,6 +96,23 @@ namespace Security {
             return val;
         }
     };
+    
+    // Çok katmanlı şifreleme anahtarları (runtime generated)
+    struct EncryptionKeys {
+        BYTE hmacKey[HMAC_KEY_SIZE];
+        BYTE xorKeys[8][MAX_XOR_KEY_SIZE]; // 8 katmanlı XOR için
+        
+        EncryptionKeys() {
+            auto hmacData = SecureRandom::Generate(HMAC_KEY_SIZE);
+            memcpy(hmacKey, hmacData.data(), HMAC_KEY_SIZE);
+            for (int i = 0; i < 8; i++) {
+                auto key = SecureRandom::Generate(MAX_XOR_KEY_SIZE);
+                memcpy(xorKeys[i], key.data(), MAX_XOR_KEY_SIZE);
+            }
+        }
+    };
+    
+    static EncryptionKeys g_keys;
     
     /**
      * @brief AES-256 CBC Şifreleme Sınıfı
@@ -144,12 +145,12 @@ namespace Security {
             BCryptHashData(hHash, data.data(), static_cast<ULONG>(data.size()), 0);
             
             DWORD hashLen = 0;
-            BCryptFinishHash(hHash, outKey.data(), static_cast<ULONG>(outKey.size()), &hashLen);
+            BCryptFinishHash(hHash, outKey.data(), static_cast<ULONG>(outKey.size()), 0);
             
             // IV için tekrar hashle
             std::vector<BYTE> ivData = outKey;
             BCryptHashData(hHash, ivData.data(), static_cast<ULONG>(ivData.size()), 0);
-            BCryptFinishHash(hHash, outIV.data(), static_cast<ULONG>(outIV.size()), &hashLen);
+            BCryptFinishHash(hHash, outIV.data(), static_cast<ULONG>(outIV.size()), 0);
             
             BCryptDestroyHash(hHash);
             BCryptCloseAlgorithmProvider(hAlg, 0);
@@ -284,7 +285,7 @@ namespace Security {
         // Runtime seed generation with RDRAND
         static uint32_t runtimeSeed() {
             return static_cast<uint32_t>(SecureRandom::GetRDRAND() ^ 
-                    (reinterpret_cast<uintptr_t>(&data) & 0xFFFFFFFF));
+                    (static_cast<uintptr_t>(__LINE__) * 0x27D4EB2Fu));
         }
         
         inline unsigned char deriveKey(size_t idx, uint32_t s) const {
@@ -295,7 +296,7 @@ namespace Security {
         }
         
     public:
-        constexpr SecureString() : seed(runtimeSeed()), length(0) {
+        SecureString() : seed(runtimeSeed()), length(0) {
             memset(data, 0, N);
         }
         
@@ -377,7 +378,7 @@ namespace Security {
         }
         
     public:
-        constexpr SecureWString(const wchar_t* str) : seed(compileTimeSeed()), length(wcslen(str)) {
+        SecureWString(const wchar_t* str) : seed(compileTimeSeed()), length(wcslen(str)) {
             for (size_t i = 0; i < length && i < N-1; i++) {
                 unsigned char key = deriveKey(i, seed);
                 unsigned short c = static_cast<unsigned short>(str[i]);
@@ -439,6 +440,10 @@ namespace Security {
     // ========================================================================
     bool VerifyCodeIntegrity();
     bool CalculateAndVerifyChecksum();
+    
+    // Anti-dump and memory protection
+    void AntiDump();
+    void ProtectMemory();
     
     // RAII-based memory protection
     class MemoryProtector;
