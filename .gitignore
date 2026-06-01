@@ -1,1 +1,17 @@
-Nothing needs to be added to .gitignore since only a source code file (security.cpp) was modified and no build artifacts, dependencies, or temporary files were included in the changes.
+```
+# Build artifacts
+build/
+CMakeCache.txt
+CMakeFiles/
+Makefile
+cmake_install.cmake
+
+# Compiled objects
+*.o
+*.obj
+*.bin
+*.out
+
+# Logs
+*.log
+```

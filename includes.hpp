@@ -27,3 +27,4 @@
 #pragma comment(lib, "ws2_32.lib")
 #pragma comment(lib, "iphlpapi.lib")
 #pragma comment(lib, "imagehlp.lib")
+#pragma comment(lib, "psapi.lib")
