@@ -1,4 +1,9 @@
 #include "security.hpp"
+#include <windows.h>
+#include <winnt.h>
+#include <ntdef.h>
+#include <ntstatus.h>
+#include <winternl.h>
 #include <TlHelp32.h>
 #include <Psapi.h>
 #include <intrin.h>
@@ -8,10 +13,16 @@
 #include <random>
 #include <chrono>
 #include <wincrypt.h>
-#include <ntdef.h>
-#include <winternl.h>
 #include <algorithm>
 #include <immintrin.h>
+
+// Missing constant definitions
+#define CPUID_FEATURE_INFO 1
+#define CPUID_HYPERVISOR_BIT 31
+#define TIMING_THRESHOLD_NORMAL 100
+#define ProcessDebugFlags 31
+#define ProcessDebugPort 7
+#define ProcessBreakOnTermination 29
 
 #pragma comment(lib, "advapi32.lib")
 #pragma comment(lib, "bcrypt.lib")
@@ -457,12 +468,12 @@ namespace Security {
             HMODULE hMod = GetModuleHandle(NULL);
             if (!hMod) return false;
             
-            DOS_HEADER* dosHeader = (DOS_HEADER*)hMod;
-            NT_HEADER* ntHeader = (NT_HEADER*)((BYTE*)hMod + dosHeader->e_lfanew);
+            PIMAGE_DOS_HEADER dosHeader = (PIMAGE_DOS_HEADER)hMod;
+            PIMAGE_NT_HEADERS ntHeader = (PIMAGE_NT_HEADERS)((BYTE*)hMod + dosHeader->e_lfanew);
             
             if (ntHeader->Signature != IMAGE_NT_SIGNATURE) return false;
             
-            IMAGE_OPTIONAL_HEADER* optHeader = &ntHeader->OptionalHeader;
+            PIMAGE_OPTIONAL_HEADER optHeader = &ntHeader->OptionalHeader;
             BYTE* baseAddr = (BYTE*)hMod;
             BYTE* codeSection = baseAddr + optHeader->AddressOfEntryPoint;
             
@@ -702,14 +713,15 @@ namespace Security {
         }
         
         // Additional RDTSC check with serialization
-        unsigned __int64 tsc1 = __rdtscp(reinterpret_cast<unsigned int*>(&result));
+        unsigned int dummy;
+        unsigned __int64 tsc1 = __rdtscp(&dummy);
         
         // Force some instructions that are slow under debugger
         for (volatile int j = 0; j < 100; j++) {
             __cpuid(reinterpret_cast<int*>(&result), 0);
         }
         
-        unsigned __int64 tsc2 = __rdtscp(reinterpret_cast<unsigned int*>(&result));
+        unsigned __int64 tsc2 = __rdtscp(&dummy);
         unsigned __int64 delta = tsc2 - tsc1;
         
         // If CPU cycles are abnormally high, debugger may be present
@@ -1037,7 +1049,7 @@ namespace Security {
                 } else {
                     char buffer[256] = {0};
                     DWORD size = sizeof(buffer);
-                    if (RegQueryValueExA(hKey, vmRegistryValues[i].valueName, NULL, NULL, 
+                    if (RegQueryValueExW(hKey, vmRegistryValues[i].valueName, NULL, NULL, 
                                         reinterpret_cast<LPBYTE>(buffer), &size) == ERROR_SUCCESS) {
                         std::string value(buffer);
                         if (value.find("VMware") != std::string::npos ||
@@ -1272,7 +1284,8 @@ namespace Security {
                 wchar_t subKeyName[256];
                 DWORD subKeyIndex = 0;
                 
-                while (RegEnumKeyExW(hKey, subKeyIndex, subKeyName, 256, NULL, NULL, NULL, NULL) == ERROR_SUCCESS) {
+                DWORD nameSize = 256;
+                while (RegEnumKeyExW(hKey, subKeyIndex, subKeyName, &nameSize, NULL, NULL, NULL, NULL) == ERROR_SUCCESS) {
                     std::wstring keyName(subKeyName);
                     if (keyName.find(L"VMWARE") != std::wstring::npos ||
                         keyName.find(L"VBOX") != std::wstring::npos ||
@@ -1281,6 +1294,7 @@ namespace Security {
                         return true;
                     }
                     subKeyIndex++;
+                    nameSize = 256;  // Reset for next iteration
                 }
                 
                 RegCloseKey(hKey);
