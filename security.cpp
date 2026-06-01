@@ -10,6 +10,34 @@
 #include <wincrypt.h>
 
 #pragma comment(lib, "advapi32.lib")
+#pragma comment(lib, "bcrypt.lib")
+#pragma comment(lib, "ntdll.lib")
+
+// NTDLL function pointers for dynamic syscall
+typedef NTSTATUS (NTAPI *pfnNtAllocateVirtualMemory)(
+    HANDLE ProcessHandle,
+    PVOID *BaseAddress,
+    ULONG_PTR ZeroBits,
+    PSIZE_T RegionSize,
+    ULONG AllocationType,
+    ULONG Protect
+);
+
+typedef NTSTATUS (NTAPI *pfnNtProtectVirtualMemory)(
+    HANDLE ProcessHandle,
+    PVOID *BaseAddress,
+    PSIZE_T RegionSize,
+    ULONG NewProtect,
+    PULONG OldProtect
+);
+
+typedef NTSTATUS (NTAPI *pfnNtQueryInformationProcess)(
+    HANDLE ProcessHandle,
+    ULONG ProcessInformationClass,
+    PVOID ProcessInformation,
+    ULONG ProcessInformationLength,
+    PULONG ReturnLength
+);
 
 namespace Security {
     // AES S-Box (Substitution Box) - AES standardından alınmıştır
@@ -52,9 +80,6 @@ namespace Security {
         0x17, 0x2b, 0x04, 0x7e, 0xba, 0x77, 0xd6, 0x26, 0xe1, 0x69, 0x14, 0x63, 0x55, 0x21, 0x0c, 0x7d
     };
 
-    // Global encryption keys - runtime'da initialize edilir
-    EncryptionKeys g_keys;
-
     // CRC64 lookup table
     static uint64_t crc64_table[256];
     static bool crc64_table_initialized = false;
@@ -74,63 +99,7 @@ namespace Security {
         crc64_table_initialized = true;
     }
 
-    // EncryptionKeys constructor - güvenli random ile anahtar üretir
-    EncryptionKeys::EncryptionKeys() {
-        RegenerateKeys();
-    }
-
-    // Anahtarları yeniden üret - cryptographically secure random kullanır
-    void EncryptionKeys::RegenerateKeys() {
-        // Cryptographically secure random number generator
-        HCRYPTPROV hProv = 0;
-        if (!CryptAcquireContext(&hProv, NULL, NULL, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT)) {
-            // Fallback to time-based seed
-            srand(static_cast<unsigned int>(time(nullptr) ^ reinterpret_cast<size_t>(&hProv)));
-        }
-
-        // XOR keys oluştur
-        for (size_t k = 0; k < XOR_KEY_COUNT; k++) {
-            keySeeds[k] = static_cast<uint32_t>(
-                std::chrono::high_resolution_clock::now().time_since_epoch().count() ^ 
-                reinterpret_cast<size_t>(&xorKeys[k])
-            );
-            
-            for (size_t i = 0; i < MAX_XOR_KEY_SIZE; i++) {
-                if (hProv) {
-                    CryptGenRandom(hProv, 1, &xorKeys[k][i]);
-                } else {
-                    xorKeys[k][i] = static_cast<unsigned char>((rand() ^ (i * k)) & 0xFF);
-                }
-                // Key mixing
-                xorKeys[k][i] ^= S_BOX[xorKeys[k][i] ^ (i & 0xFF)];
-            }
-        }
-
-        // HMAC key oluştur
-        for (size_t i = 0; i < HMAC_KEY_SIZE; i++) {
-            if (hProv) {
-                CryptGenRandom(hProv, 1, &hmacKey[i]);
-            } else {
-                hmacKey[i] = static_cast<unsigned char>((rand() ^ i) & 0xFF);
-            }
-            hmacKey[i] ^= S_BOX[hmacKey[i] ^ i];
-        }
-
-        // IV oluştur
-        for (size_t i = 0; i < IV_SIZE; i++) {
-            if (hProv) {
-                CryptGenRandom(hProv, 1, &iv[i]);
-            } else {
-                iv[i] = static_cast<unsigned char>((rand() ^ (i * 7)) & 0xFF);
-            }
-        }
-
-        if (hProv) {
-            CryptReleaseContext(hProv, 0);
-        }
-    }
-
-    // SecureZeroMemory - güvenli bellek sıfırlama
+    // SecureZeroMemory - güvenli bellek sıfırlama (override Windows API)
     void SecureZeroMemory(void* ptr, size_t size) {
         volatile unsigned char* p = static_cast<unsigned char*>(ptr);
         while (size--) *p++ = 0;
@@ -364,9 +333,256 @@ namespace Security {
         
         return std::wstring(decrypted.begin(), decrypted.end());
     }
+
+    // ==================== GELİŞMİŞ ANTI-DEBUG ====================
+    
+    namespace AntiDebug {
+        bool IsDebuggerPresent_Advanced() {
+            // Standard check
+            if (IsDebuggerPresent()) return true;
+            
+            // Remote debugger check
+            BOOL isRemote = FALSE;
+            CheckRemoteDebuggerPresent(GetCurrentProcess(), &isRemote);
+            if (isRemote) return true;
+            
+            // NtGlobalFlag check
+            if (CheckNtGlobalFlag()) return true;
+            
+            // Heap flags check
+            if (CheckHeapFlags()) return true;
+            
+            return false;
+        }
+        
+        bool CheckNtGlobalFlag() {
+            HMODULE hNtdll = GetModuleHandleA("ntdll.dll");
+            if (!hNtdll) return false;
+            
+            typedef NTSTATUS (NTAPI *pfnNtQueryInformationProcess)(
+                HANDLE ProcessHandle, ULONG ProcessInformationClass,
+                PVOID ProcessInformation, ULONG ProcessInformationLength,
+                PULONG ReturnLength);
+            
+            pfnNtQueryInformationProcess NtQueryInformationProcess = 
+                (pfnNtQueryInformationProcess)GetProcAddress(hNtdll, "NtQueryInformationProcess");
+            if (!NtQueryInformationProcess) return false;
+            
+            PROCESS_BASIC_INFORMATION pbi = {};
+            NTSTATUS status = NtQueryInformationProcess(GetCurrentProcess(), 0, &pbi, sizeof(pbi), NULL);
+            if (!NT_SUCCESS(status)) return false;
+            
+            PEB* peb = reinterpret_cast<PEB*>(pbi.PebBaseAddress);
+            if (!peb) return false;
+            
+            BYTE ntlGlobalFlag = peb->NtGlobalFlag;
+            return (ntlGlobalFlag & 0x70) == 0x70;
+        }
+        
+        bool CheckHeapFlags() {
+            HMODULE hNtdll = GetModuleHandleA("ntdll.dll");
+            if (!hNtdll) return false;
+            
+            typedef NTSTATUS (NTAPI *pfnNtQueryInformationProcess)(
+                HANDLE ProcessHandle, ULONG ProcessInformationClass,
+                PVOID ProcessInformation, ULONG ProcessInformationLength,
+                PULONG ReturnLength);
+            
+            pfnNtQueryInformationProcess NtQueryInformationProcess = 
+                (pfnNtQueryInformationProcess)GetProcAddress(hNtdll, "NtQueryInformationProcess");
+            if (!NtQueryInformationProcess) return false;
+            
+            PROCESS_BASIC_INFORMATION pbi = {};
+            NTSTATUS status = NtQueryInformationProcess(GetCurrentProcess(), 0, &pbi, sizeof(pbi), NULL);
+            if (!NT_SUCCESS(status)) return false;
+            
+            PEB* peb = reinterpret_cast<PEB*>(pbi.PebBaseAddress);
+            if (!peb) return false;
+            
+            // Check heap flags
+            PEB_LDR_DATA* ldr = peb->Ldr;
+            if (!ldr) return false;
+            
+            LIST_ENTRY* head = &ldr->InLoadOrderModuleList;
+            LIST_ENTRY* curr = head->Flink;
+            
+            while (curr != head) {
+                LDR_DATA_TABLE_ENTRY* entry = CONTAINING_RECORD(curr, LDR_DATA_TABLE_ENTRY, InLoadOrderLinks);
+                if (entry->FullDllName.Buffer) {
+                    // Check for known debugger DLLs
+                    const wchar_t* dllName = entry->FullDllName.Buffer;
+                    if (wcsstr(dllName, L"dbgcore") || wcsstr(dllName, L"debugger")) {
+                        return true;
+                    }
+                }
+                curr = curr->Flink;
+            }
+            
+            return false;
+        }
+        
+        bool CheckRemoteDebugger() {
+            BOOL isDebugged = FALSE;
+            CheckRemoteDebuggerPresent(GetCurrentProcess(), &isDebugged);
+            return isDebugged == TRUE;
+        }
+        
+        bool CheckTimingAttack(uint32_t threshold_ms) {
+            LARGE_INTEGER freq, start, end;
+            QueryPerformanceFrequency(&freq);
+            QueryPerformanceCounter(&start);
+            
+            // Busy wait for a short period
+            volatile int sum = 0;
+            for (int i = 0; i < 1000000; i++) {
+                sum += i;
+            }
+            
+            QueryPerformanceCounter(&end);
+            double elapsedMs = (double)(end.QuadPart - start.QuadPart) / freq.QuadPart * 1000.0;
+            
+            // If debugger is attached, timing will be significantly different
+            return elapsedMs > threshold_ms * 2.0;
+        }
+        
+        bool CheckBreakpoints() {
+            return CheckSoftwareBreakpoints() || CheckHardwareBreakpoints();
+        }
+        
+        bool CheckSoftwareBreakpoints() {
+            HMODULE hMod = GetModuleHandle(NULL);
+            if (!hMod) return false;
+            
+            DOS_HEADER* dosHeader = (DOS_HEADER*)hMod;
+            NT_HEADER* ntHeader = (NT_HEADER*)((BYTE*)hMod + dosHeader->e_lfanew);
+            
+            if (ntHeader->Signature != IMAGE_NT_SIGNATURE) return false;
+            
+            IMAGE_OPTIONAL_HEADER* optHeader = &ntHeader->OptionalHeader;
+            BYTE* baseAddr = (BYTE*)hMod;
+            BYTE* codeSection = baseAddr + optHeader->AddressOfEntryPoint;
+            
+            // Check for INT3 (0xCC) at entry point
+            if (*codeSection == 0xCC) return true;
+            
+            return false;
+        }
+        
+        bool CheckHardwareBreakpoints() {
+            CONTEXT ctx = {};
+            ctx.ContextFlags = CONTEXT_DEBUG_REGISTERS;
+            
+            if (!GetThreadContext(GetCurrentThread(), &ctx)) return false;
+            
+            return (ctx.Dr0 != 0 || ctx.Dr1 != 0 || ctx.Dr2 != 0 || ctx.Dr3 != 0);
+        }
+        
+        void EnableAntiDebug() {
+            // Set critical process to prevent termination
+            typedef NTSTATUS (NTAPI *pfnNtSetInformationProcess)(
+                HANDLE ProcessHandle, ULONG ProcessInformationClass,
+                PVOID ProcessInformation, ULONG ProcessInformationLength);
+            
+            HMODULE hNtdll = GetModuleHandleA("ntdll.dll");
+            if (hNtdll) {
+                pfnNtSetInformationProcess NtSetInformationProcess = 
+                    (pfnNtSetInformationProcess)GetProcAddress(hNtdll, "NtSetInformationProcess");
+                
+                if (NtSetInformationProcess) {
+                    // Set process as critical
+                    ULONG breakOnTermination = 1;
+                    NtSetInformationProcess(GetCurrentProcess(), 29, &breakOnTermination, sizeof(ULONG));
+                }
+            }
+        }
+        
+        void TriggerAntiDebugException() {
+            // Trigger an exception that debuggers might not handle correctly
+            __try {
+                RaiseException(0xE0000001, 0, 0, NULL);
+            } __except(EXCEPTION_EXECUTE_HANDLER) {
+                // Silently handle
+            }
+        }
+    }
+
+    // ==================== DYNAMIC SYSCALL RESOLUTION ====================
+    
+    namespace Syscall {
+        // Hell's Gate / Halo's Gate technique for dynamic SSN resolution
+        WORD GetSSN(const char* functionName) {
+            HMODULE hNtdll = GetModuleHandleA("ntdll.dll");
+            if (!hNtdll) return 0;
+            
+            BYTE* addr = (BYTE*)GetProcAddress(hNtdll, functionName);
+            if (!addr) return 0;
+            
+            // Look for syscall instruction pattern
+            // mov r10, rcx; mov eax, SSN; syscall
+            for (int i = 0; i < 24; i++) {
+                if (addr[i] == 0xB8) { // mov eax, imm32
+                    WORD ssn = *(WORD*)&addr[i + 1];
+                    return ssn;
+                }
+            }
+            
+            return 0;
+        }
+        
+        PVOID GetSyscallStub(const char* functionName) {
+            HMODULE hNtdll = GetModuleHandleA("ntdll.dll");
+            if (!hNtdll) return nullptr;
+            
+            return (PVOID)GetProcAddress(hNtdll, functionName);
+        }
+        
+        NTSTATUS CallNtAllocateVirtualMemory(HANDLE processHandle, PVOID* baseAddress,
+                                              ULONG_PTR zeroBits, PSIZE_T regionSize,
+                                              ULONG allocationType, ULONG protect) {
+            static pfnNtAllocateVirtualMemory pNtAlloc = nullptr;
+            if (!pNtAlloc) {
+                HMODULE hNtdll = GetModuleHandleA("ntdll.dll");
+                if (hNtdll) {
+                    pNtAlloc = (pfnNtAllocateVirtualMemory)GetProcAddress(hNtdll, "NtAllocateVirtualMemory");
+                }
+            }
+            
+            if (pNtAlloc) {
+                return pNtAlloc(processHandle, baseAddress, zeroBits, regionSize, allocationType, protect);
+            }
+            
+            // Fallback to VirtualAlloc
+            *baseAddress = VirtualAlloc(*baseAddress, *regionSize, allocationType, protect);
+            return *baseAddress ? 0 : 0xC0000001;
+        }
+        
+        NTSTATUS CallNtProtectVirtualMemory(HANDLE processHandle, PVOID* baseAddress,
+                                             PSIZE_T regionSize, ULONG newProtect, PULONG oldProtect) {
+            static pfnNtProtectVirtualMemory pNtProt = nullptr;
+            if (!pNtProt) {
+                HMODULE hNtdll = GetModuleHandleA("ntdll.dll");
+                if (hNtdll) {
+                    pNtProt = (pfnNtProtectVirtualMemory)GetProcAddress(hNtdll, "NtProtectVirtualMemory");
+                }
+            }
+            
+            if (pNtProt) {
+                return pNtProt(processHandle, baseAddress, regionSize, newProtect, oldProtect);
+            }
+            
+            // Fallback to VirtualProtect
+            if (VirtualProtect(*baseAddress, *regionSize, newProtect, (DWORD*)oldProtect)) {
+                return 0;
+            }
+            return 0xC0000001;
+        }
+    }
+
+    // ==================== EXISTING FUNCTIONS ====================
+    
     bool SecurityCheck() {
-        if (IsDebuggerPresentCheck()) {
-            std::cout << "\n [-] Debugger detected!";
+        if (AntiDebug::IsDebuggerPresent_Advanced()) {
+            std::cout << "\n [-] Advanced debugger detected!";
             return false;
         }
         
@@ -384,20 +600,11 @@ namespace Security {
     }
 
     bool IsDebuggerPresentCheck() {
-        if (IsDebuggerPresent()) return true;
-        
-        BOOL isDebugged = FALSE;
-        CheckRemoteDebuggerPresent(GetCurrentProcess(), &isDebugged);
-        return isDebugged;
+        return AntiDebug::IsDebuggerPresent_Advanced();
     }
 
     bool CheckDebugRegisters() {
-        CONTEXT ctx = {};
-        ctx.ContextFlags = CONTEXT_DEBUG_REGISTERS;
-        
-        if (!GetThreadContext(GetCurrentThread(), &ctx)) return false;
-        
-        return (ctx.Dr0 != 0 || ctx.Dr1 != 0 || ctx.Dr2 != 0 || ctx.Dr3 != 0);
+        return AntiDebug::CheckHardwareBreakpoints();
     }
 
     bool CheckDebuggerTools() {

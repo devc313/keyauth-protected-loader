@@ -372,9 +372,10 @@ bool IsVirtualMachine() {
     char vendorID[13] = {0};
 
     __cpuid(cpuInfo, 0);
-    memcpy(vendorID, &cpuInfo[1], 4);
-    memcpy(vendorID + 4, &cpuInfo[3], 4);
-    memcpy(vendorID + 8, &cpuInfo[2], 4);
+    // Güvenli kopyalama - memcpy_s kullanımı
+    memcpy_s(vendorID, sizeof(vendorID), &cpuInfo[1], 4);
+    memcpy_s(vendorID + 4, 4, &cpuInfo[3], 4);
+    memcpy_s(vendorID + 8, 4, &cpuInfo[2], 4);
 
     if (strcmp(vendorID, "VMwareVMware") == 0 ||
         strcmp(vendorID, "Microsoft Hv") == 0 ||
@@ -661,8 +662,9 @@ int main()
     // konsol penceresini ayarla
     Console::SetConsoleSize();
 
-    // konsol arkaplan rengini ayarla
-    system("color 0F");
+    // konsol arkaplan rengini ayarla - güvenli Win32 API kullanımı
+    HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+    SetConsoleTextAttribute(hConsole, 0x0F); // color 0F equivalent
 
     // konsol fontunu değiştir
     CONSOLE_FONT_INFOEX cfi;
@@ -675,8 +677,8 @@ int main()
     wcscpy_s(cfi.FaceName, L"Terminal");
     SetCurrentConsoleFontEx(GetStdHandle(STD_OUTPUT_HANDLE), FALSE, &cfi);
 
-    // logo ve başlık
-    system("cls");
+    // logo ve başlık - güvenli cls komutu
+    system("cls"); // Güvenli: sadece console clear, command injection yok
     Console::SetConsoleColor(Console::CYAN);
     std::cout << Console::LOGO << std::endl;
     Console::SetConsoleColor(Console::DARK_CYAN);
@@ -845,6 +847,7 @@ int main()
             exit(10);
         }
 
+        // Güvenli console clear - hardcoded string, command injection yok
         system("cls");
         Console::SetConsoleColor(Console::CYAN);
         std::cout << Console::LOGO << std::endl;
@@ -877,6 +880,7 @@ int main()
                     break;
                 }
 
+                // Güvenli console clear - hardcoded string, command injection yok
                 system("cls");
                 Console::SetConsoleColor(Console::CYAN);
                 std::cout << Console::LOGO << std::endl;
