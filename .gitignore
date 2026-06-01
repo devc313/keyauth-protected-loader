@@ -1,25 +1,33 @@
-```
+```gitignore
+# Dependencies
+node_modules/
+venv/
+.venv/
+__pycache__/
+.mypy_cache/
+.pytest_cache/
+target/
+.gradle/
+
 # Build artifacts
+dist/
 build/
-CMakeFiles/
-CMakeCache.txt
-cmake_install.cmake
-Makefile
+*.pyc
+*.class
 *.o
-*.a
-*.so
-*.dylib
-*.dll
 *.exe
+*.dll
+*.so
+*.a
+*.obj
 *.out
 
-# Dependencies
-.externalNativeBuild/
-.gradle/
-node_modules/
-vendor/
+# Environment files
+.env
+.env.local
+*.env.*
 
-# IDE files
+# Editor/IDE files
 .vscode/
 .idea/
 *.swp
@@ -29,22 +37,12 @@ vendor/
 # Logs
 *.log
 
-# Environment
-.env
-.env.local
-*.env.*
-
 # Coverage
 coverage/
 htmlcov/
 .coverage
 
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-*.so
-.PyInstaller/
+# System files
+.DS_Store
+Thumbs.db
 ```
