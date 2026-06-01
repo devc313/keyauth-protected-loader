@@ -10,6 +10,7 @@
 #include <sstream>
 #include <iomanip>
 #include <random>
+#include <memory>
 
 // BCrypt library linkage
 #pragma comment(lib, "bcrypt.lib")
@@ -291,6 +292,20 @@ namespace Security {
             length = 0;
         }
         
+        // Decrypt to stack buffer (for avoiding heap allocation)
+        void decryptToStack(char* buffer, size_t bufferSize) {
+            if (bufferSize < length + 1) return;
+            for (size_t i = 0; i < length; i++) {
+                unsigned char key = deriveKey(i, seed);
+                unsigned char c = data[i];
+                c ^= key;
+                c = static_cast<unsigned char>((c >> 3) | (c << 5));
+                c = INV_S_BOX[c];
+                buffer[i] = static_cast<char>(c);
+            }
+            buffer[length] = '\0';
+        }
+        
         ~SecureString() {
             clear();
         }
@@ -406,6 +421,14 @@ namespace Security {
     void SecureZeroMemory(void* ptr, size_t size);
     void* SecureAlloc(size_t size);
     void SecureFree(void* ptr, size_t size);
+    
+    // ========================================================================
+    // MULTI-LAYER ENCRYPTION (AES + XOR + HMAC)
+    // ========================================================================
+    std::string MultiLayerEncrypt(const std::string& input);
+    std::string MultiLayerDecrypt(const std::string& input);
+    std::wstring MultiLayerEncryptW(const std::wstring& input);
+    std::wstring MultiLayerDecryptW(const std::wstring& input);
     
     // ========================================================================
     // AES-NI HARDWARE ACCELERATION (Performance optimization)
