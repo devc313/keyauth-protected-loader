@@ -1,100 +1,269 @@
-# KeyAuth Protected Loader
+<div align="center">
 
-[![Build Status](https://github.com/devc313/keyauth-protected-loader/workflows/Build%20Protected%20Loader/badge.svg)](https://github.com/devc313/keyauth-protected-loader/actions)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-3.0-green.svg)](https://github.com/devc313/keyauth-protected-loader/releases)
+# 🔐 KeyAuth Protected Loader
 
-Advanced multi-layer protected loader application with KeyAuth integration. Performs security checks before launching your application, establishes encrypted communication, and blocks unauthorized access.
+**A production-ready C++ loader template with KeyAuth 1.3 API integration and multi-layer protection.**
+
+Anti-debug, anti-VM, compile-time string obfuscation, 9-layer encryption, and NTP time validation. Targets Windows x64.
+
+[![Build](https://img.shields.io/github/actions/workflow/status/devc313/keyauth-protected-loader/build.yml?branch=main&logo=githubactions&logoColor=white&label=Build&style=for-the-badge)](https://github.com/devc313/keyauth-protected-loader/actions)
+[![Language](https://img.shields.io/badge/C%2B%2B-17-00599C?style=for-the-badge&logo=cplusplus&logoColor=white)](https://en.cppreference.com)
+[![Platform](https://img.shields.io/badge/platform-Windows%20x64-0078D4?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/devc313/keyauth-protected-loader)
+[![License](https://img.shields.io/github/license/devc313/keyauth-protected-loader?style=for-the-badge&color=22C55E)](LICENSE)
+[![Stars](https://img.shields.io/github/stars/devc313/keyauth-protected-loader?style=for-the-badge&color=FFD700)](https://github.com/devc313/keyauth-protected-loader/stargazers)
+
+</div>
 
 ---
 
-## Features
+## Overview
 
-### Multi-Layer Encryption
-- **9-Layer Hybrid Encryption** — XOR, S-Box substitution, bit rotation, permutation, and MAC verification
-- **Compile-Time String Obfuscation** — Strings are encrypted at compile time, never exposed in binary
-- **SecureString Class** — Automatic in-memory encryption and decryption for sensitive values
-- **HMAC-Like MAC** — Data integrity verification on all critical payloads
-- **Dynamic Pointer Encryption** — Runtime function pointer encryption using server-provided keys
+A hardened loader template built on top of the [KeyAuth](https://keyauth.win) licensing API. It wraps license validation behind multiple anti-analysis layers and binds each session on both the client and server sides.
 
-### Anti-Debug & Anti-Analysis
-- **Timing-Based Detection** — RDTSC/RDTSCP instruction timing to detect debugger-induced delays
-- **PEB Analysis** — Process Environment Block inspection for debugging flags
-- **Breakpoint Detection** — INT3 scanning and hardware breakpoint (DR0–DR7) inspection
-- **VM Detection** — Identifies VMware, VirtualBox, and QEMU environments
-- **Emulator Detection** — Identifies Bochs and DOSBox environments
-- **Direct Syscall Engine** — Bypasses EDR hooks on `ntdll.dll`
-- **Delayed Crash System** — Corrupts memory state rather than crashing immediately, making analysis harder
-- **Process Criticality Flag** — Sets `ProcessBreakOnTermination`; forced kills result in BSOD
+**Intended use:** A secure starting point for applications that use KeyAuth for licensing, so you don't have to implement the protection layer from scratch.
 
-### System Integrity Checks
-- **Hosts File Verification** — Detects DNS hijacking via modified hosts file
-- **Proxy Detection** — Checks system proxy settings for MITM attempts
-- **Registry Integrity** — Validates license key registry entries
-- **Process Scanning** — Detects known analysis tools (Cheat Engine, x64dbg, IDA Pro, etc.)
-- **Code Integrity** — CRC64 checksum verification on critical code regions
-- **Environment Binding** — Ties each session to PEB address, LDR timestamps, and module load times
+---
 
-### SSL Pinning & Secure Communication
-- **Certificate Pinning** — KeyAuth.win server certificates are pinned
-  - Certificate Hash: `d7864f2520cef30934c873a7bf6e10be414ec6ae9c45d35b39b319879ed9f9ca`
-  - Public Key Hash: `07d6fed49881218506064dba779b903405d56cc7826a24b15c763cc64ab98356`
-- **WinHTTP API** — All communication uses the secure WinHTTP stack
-- **MITM Protection** — Guards against SSL stripping and downgrade attacks
+## Repository Structure
 
-### Control Flow Obfuscation
-- **Control Flow Flattening** — Restructures execution paths to defeat static analysis
-- **Opaque Predicates** — Injects conditions that defeat compiler optimizations
-- **Dead Code Insertion** — Adds misleading code blocks to slow manual analysis
+```
+keyauth-protected-loader/
+├── main.cpp                    # Entry point, auth flow, console UI
+├── SecureCore.h                # 9-layer cipher engine, compile-time obfuscation
+├── security.hpp / security.cpp # Anti-debug, anti-VM, process scanner
+├── security_enhanced.hpp       # BCrypt-based secure RNG, runtime key generation
+├── secure_literals.hpp         # CW_STR / CW_WSTR compile-time string encryption
+├── skStr.h                     # Stack string obfuscation helpers
+├── auth.hpp                    # KeyAuth C++ SDK (v1.3)
+├── ntp.hpp / ntp.cpp           # NTP time sync (pool.ntp.org, UDP/123)
+├── console.hpp / console.cpp   # Console color, animation, layout helpers
+├── utils.hpp                   # Time conversion utilities
+├── includes.hpp                # Global include aggregator
+├── library_x64.lib             # KeyAuth precompiled library (x64)
+├── Project/Protection/
+│   └── AdvancedProtection.h    # INIT/BEGIN/END/UPDATE_PROTECTION macros
+├── CMakeLists.txt
+└── KeyAuthLoader.sln / .vcxproj
+```
 
-### Session-Bound Protection
-- **PEB/LDR Binding** — Captures and validates PEB address and module load timestamps each session
-- **Thread/Process ID Binding** — Ties session context to specific thread and process IDs
-- **Load Time Validation** — Detects dump and reload attacks via module timestamp checks
-- **Server-Side Fingerprinting** — Unique session fingerprints sent to and validated by the server
-- **Dynamic Key Rotation** — XOR keys for pointer decryption are provided per-session by the server
+---
+
+## Security Architecture
+
+### 1. Compile-Time String Obfuscation
+
+The `CW_STR` / `CW_WSTR` macros in `secure_literals.hpp` and `skStr.h` encrypt string literals at compile time. The encryption key is derived from the `__TIME__` constant — each build produces unique encrypted constants.
+
+```cpp
+// "ollydbg.exe" is never visible as plaintext in the binary
+const wchar_t* tool = CW_WSTR(L"ollydbg.exe").decrypt();
+
+// KeyAuth credentials are obfuscated the same way
+Security::SecureString<32> NAME("appname");
+Security::SecureString<64> URL("https://keyauth.win/api/1.3/");
+```
+
+The `SecureString<N>` template class keeps strings encrypted on the heap. `decryptToStack()` temporarily decrypts to a stack buffer and wipes it with `SecureZeroMemory` after use.
+
+---
+
+### 2. 9-Layer Cipher Engine (`CryptoEngine::MultiLayerCipher`)
+
+The license key is passed through 9 sequential transforms before being written to the registry:
+
+| Layer | Operation |
+|-------|-----------|
+| 1 | XOR — 32-byte key stream |
+| 2 | S-Box substitution (AES S-Box) |
+| 3 | Bit rotation left (3 bits) |
+| 4 | XOR — inverted key stream |
+| 5 | Adjacent byte permutation (index-based swap) |
+| 6 | Second S-Box substitution (XOR with index) |
+| 7 | Conditional bit flip (every 5th byte XOR `0x20`) |
+| 8 | Bit rotation right (2 bits) |
+| 9 | MAC tag append (4-byte HMAC-like integrity tag) |
+
+During decryption the MAC is verified first. On failure, the buffer is wiped with `SecureZeroMemory` and an empty result is returned. The encrypted payload is Base64-encoded before being stored in the registry.
+
+---
+
+### 3. Runtime Key Generation (`security_enhanced.hpp`)
+
+`SecureRandom` uses **BCrypt CNG** (`BCryptGenRandom`) to generate fresh keys on every process start. On Intel/AMD hardware, `_rdrand64_step` is used for hardware RNG.
+
+`EncryptionKeys` zeroes all key material in its destructor:
+
+```
+EncryptionKeys:
+  hmacKey[32]       ← BCryptGenRandom
+  xorKeys[8][64]    ← 8 independent XOR keys (one per layer)
+```
+
+---
+
+### 4. Anti-Debug & Anti-Analysis
+
+**Debugger Detection**
+- `IsDebuggerPresent()` + `CheckRemoteDebuggerPresent()`
+- `CONTEXT.Dr0–Dr3` hardware breakpoint register scan
+- `NtQueryInformationProcess` PEB debug flag check
+- RDTSC timing analysis — threshold: `50,000 ns` (`SecureConfig::RDTSC_THRESHOLD`)
+
+**Tool Detection** (via process snapshot)
+- OllyDbg, x64dbg, x32dbg, IDA Pro (`ida.exe` / `ida64.exe`)
+- Cheat Engine, Process Hacker, HTTPDebuggerUI, Procmon
+
+**Anti-Dump**
+- `VirtualProtect` sets PE header pages to `PAGE_READONLY`
+
+---
+
+### 5. Anti-VM Detection
+
+Three independent methods combined:
+
+**CPUID Vendor String**
+- `"VMwareVMware"`, `"Microsoft Hv"`, `"VBoxVBoxVBox"`
+
+**Hypervisor Bit + Device Handle**
+- CPUID `ECX[31]` hypervisor flag check
+- Open attempts on `\\.\VmGeneralPort` and `\\.\VBoxMiniRdrDN`
+
+**MAC Address OUI Check**
+- VMware: `00:0C:29` / VirtualBox: `08:00:27`
+
+**Registry Keys**
+- `SOFTWARE\VMware, Inc.\VMware Tools`
+- `SOFTWARE\Oracle\VirtualBox Guest Additions`
+
+---
+
+### 6. System Integrity Checks
+
+| Check | Method |
+|-------|--------|
+| Hosts file | Size (`> 10 KB`) + content scan for `"keyauth"`, `"127.0.0.1"` |
+| Proxy detection | `HKCU\...\Internet Settings\ProxyEnable` registry read |
+| NTP time sync | `pool.ntp.org:123` UDP — ±5 minute tolerance against system clock |
+| Response timing | KeyAuth API `< 100 ms` → emulator suspected → `exit(3)` |
+| API endpoint | URL must contain `keyauth.win` |
+
+---
+
+### 7. Control Flow Obfuscation
+
+**Opaque Predicates:** `AlwaysTrue()` / `AlwaysFalse()` — volatile conditions that always resolve the same way but appear complex to static analysis.
+
+**Control Flow Flattening:** `ExecuteFlattened<Func>` — wraps execution inside a `switch/state` dispatcher to break linear flow analysis.
+
+```cpp
+RUN_PROTECTED({
+    // This block runs through the flattened dispatcher
+    KeyAuthApp.license(key);
+});
+```
+
+---
+
+### 8. Session Binding (`AdvancedProtection`)
+
+`INIT_ADVANCED_PROTECTION()` captures the following fingerprint at startup:
+
+- PEB address (read via GS segment register — no API calls)
+- LDR module load timestamps (`PEB_LDR_DATA`)
+- Thread and process IDs
+
+`UPDATE_PROTECTION()` runs on a background thread at 1-second intervals and revalidates the environment continuously.
+
+**Critical Section:** `BEGIN_CRITICAL_SECTION()` / `END_CRITICAL_SECTION()` toggles `ProcessBreakOnTermination` — a forced kill triggers a BSOD.
+
+---
+
+### 9. License Persistence (Registry)
+
+After successful validation, the key is encrypted and written to the registry:
+
+```
+HKCU\SOFTWARE\KeyAuthLoader\License  ←  Base64( MultiLayerEncrypt(license_key) )
+```
+
+On subsequent launches it is read, decrypted, and passed directly to `KeyAuthApp.license()` — no re-entry required.
+
+---
+
+## Execution Flow
+
+```
+main()
+ │
+ ├─ INIT_ADVANCED_PROTECTION()         → capture PEB/LDR fingerprint
+ ├─ BEGIN_CRITICAL_SECTION()           → set ProcessBreakOnTermination
+ ├─ Security::AntiDump()               → PE header → PAGE_READONLY
+ ├─ Security::SecurityCheck()          → debugger / DR registers / tool scan
+ ├─ Security::AdvancedSecurityCheck()  → VM / code integrity / time manipulation
+ ├─ END_CRITICAL_SECTION()
+ ├─ NTP::CheckTimeSync()               → pool.ntp.org ±5min validation
+ │
+ ├─ [Background Thread] ─────────────→ UPDATE_PROTECTION() + SecurityCheck() every 1s
+ │
+ ├─ KeyAuthApp.init()                  → timing check (< 100ms → exit(3))
+ │
+ ├─ License in registry?
+ │    ├─ Yes → MultiLayerDecrypt → KeyAuthApp.license()
+ │    └─ No  → prompt user → KeyAuthApp.license() → save to registry
+ │
+ └─ Main loop
+      ├─ sessionStatus() thread → KeyAuthApp.check() every 20s
+      └─ [1] Load Application / [0] Exit
+```
 
 ---
 
 ## Requirements
 
-- Windows 10 or 11
-- Visual Studio 2019 or later (MSVC)
+- Windows 10 / 11 (x64)
+- Visual Studio 2019+ (MSVC, C++17)
 - CMake 3.15+
-- KeyAuth account with application credentials
+- [KeyAuth](https://keyauth.win) account with application credentials
 
 ---
 
 ## Building
 
-```bash
-git clone https://github.com/devc313/keyauth-protected-loader.git
-cd keyauth-protected-loader
+**Visual Studio:**
+```
+KeyAuthLoader.sln → Configuration: Release | Platform: x64 → Build Solution
+```
 
+**CMake:**
+```bash
+git clone https://github.com/devc313/keyauth-protected-loader
+cd keyauth-protected-loader
 mkdir build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
+cmake .. -DCMAKE_BUILD_TYPE=Release -A x64
 cmake --build . --config Release
 ```
 
-The project also builds automatically via GitHub Actions on every push. Pre-built binaries are available under the **Actions** tab or **Releases** page.
+> ⚠️ **Only `Release x64` is supported.** In Debug builds several protection layers are disabled and anti-debug checks may fire against your own process.
 
 ---
 
 ## Configuration
 
-### KeyAuth Credentials
-
-Set your credentials in `main.cpp`:
+Replace the `SecureString` definitions in `main.cpp` with your own KeyAuth credentials:
 
 ```cpp
-keyauth_data.name    = SECURE_STR("YOUR_APP_NAME");
-keyauth_data.ownerid = SECURE_STR("YOUR_OWNER_ID");
-keyauth_data.secret  = SECURE_STR("YOUR_APP_SECRET");
-keyauth_data.version = SECURE_STR("1.0");
-keyauth_data.url     = SECURE_STR("https://keyauth.win/api/1.2/");
+namespace {
+    Security::SecureString<32> NAME("YOUR_APP_NAME");
+    Security::SecureString<32> OWNERID("YOUR_OWNER_ID");
+    Security::SecureString<32> VERSION("1.0");
+    Security::SecureString<64> URL("https://keyauth.win/api/1.3/");
+    Security::SecureString<32> REGISTRY_PATH("SOFTWARE\\YourAppName");
+    Security::SecureString<32> REGISTRY_KEY("License");
+}
 ```
 
-### Security Toggles
+Individual checks can be toggled in `security.hpp`:
 
 ```cpp
 #define ENABLE_DEBUG_CHECK      true
@@ -106,175 +275,40 @@ keyauth_data.url     = SECURE_STR("https://keyauth.win/api/1.2/");
 
 ---
 
-## Usage
+## SSL Pinning
 
-### Basic Integration
-
-```cpp
-#include "SecureCore.h"
-#include "KeyAuthManager.h"
-#include "AdvancedProtection.h"
-
-int main() {
-    // Initialize protection layers
-    INIT_ADVANCED_PROTECTION();
-
-    // Enable critical process mode before sensitive operations
-    BEGIN_CRITICAL_SECTION();
-
-    // Capture environment fingerprint for server-side binding
-    std::string fingerprint = g_AdvancedProtection.GetSessionFingerprint();
-
-    // Initialize security engine with master key
-    SECURE_INIT("YourMasterSecretKey123!");
-
-    // Run all security checks
-    CHECK_SECURITY();
-
-    // Initialize KeyAuth
-    KeyAuthManager auth;
-    if (!auth.Initialize()) {
-        MessageBoxA(NULL, "Initialization failed!", "Error", MB_ICONERROR);
-        return 1;
-    }
-
-    END_CRITICAL_SECTION();
-
-    // Run login logic inside protected context
-    RUN_PROTECTED({
-        if (auth.Login(username, password)) {
-            RunApplication();
-        }
-    });
-
-    // Keep protection active in main loop
-    UPDATE_PROTECTION();
-
-    return 0;
-}
-```
-
-### Secure Strings
+`SecureConfig` hardcodes the KeyAuth server certificate hashes:
 
 ```cpp
-// Strings are obfuscated at compile time and resolved at runtime
-std::string apiUrl    = SECURE_STR("https://api.example.com/endpoint");
-std::string secretKey = SECURE_STR("super-secret-key-123");
-// Memory is cleared automatically after use
+constexpr const char* CERT_HASH[] = {
+    "d7864f2520cef30934c873a7bf6e10be414ec6ae9c45d35b39b319879ed9f9ca",  // Certificate
+    "07d6fed49881218506064dba779b903405d56cc7826a24b15c763cc64ab98356"   // Public Key
+};
 ```
-
-### Encrypted Function Pointers
-
-```cpp
-// Register function pointers at startup
-ENCRYPT_FUNCTION("CreateMove", &CL_CreateMove);
-ENCRYPT_FUNCTION("RunAimbot", &CAimbot::Run);
-
-// Decrypt and invoke at runtime using server-provided key
-auto fn = DECRYPT_FUNCTION<void(__fastcall*)(void*, void*)>("CreateMove");
-fn(edx, ecx);
-```
-
-### Manual Security Checks
-
-```cpp
-if (SecurityChecker::IsDebuggerPresent_Advanced()) {
-    ExitProcess(0);
-}
-
-if (SecurityChecker::IsVirtualMachine()) {
-    ShowFakeError();
-    ExitProcess(0);
-}
-
-if (SecurityChecker::IsHostsModified()) {
-    ExitProcess(0);
-}
-
-if (!g_AdvancedProtection.ValidateEnvironment()) {
-    g_AdvancedProtection.OnValidationFailed("Environment mismatch");
-    // Delayed crash will trigger
-}
-```
-
----
-
-## Technical Details
-
-### Encryption Layers
-
-| Layer | Operation |
-|-------|-----------|
-| 1 | XOR with cryptographically secure key stream |
-| 2 | S-Box substitution (AES-inspired) |
-| 3 | Bit rotation left (3 bits) |
-| 4 | XOR with inverted key |
-| 5 | Data permutation |
-| 6 | Second S-Box substitution |
-| 7 | Conditional bit flipping |
-| 8 | Bit rotation right (2 bits) |
-| 9 | HMAC-SHA256-like MAC tag addition |
-
-### Compile-Time String Obfuscation
-
-Strings are encrypted using a compile-time seed derived from `__TIME__`, ensuring each build produces unique encrypted constants:
-
-```cpp
-#define OBFUSCATE(str) []() {                     \
-    constexpr auto key = /* compile-time hash */; \
-    /* XOR each character against key at compile time */ \
-}()
-```
-
-### Environment Binding
-
-- **PEB Address** — Read directly via the GS segment register; no API calls involved
-- **LDR Load Times** — Module load timestamps extracted from `PEB_LDR_DATA`
-- **Thread/Process IDs** — Captured at session start and revalidated periodically
-- **Validation** — Continuous background checks detect dump, reload, or injection attempts
-
----
-
-## Security Best Practices
-
-- Never store master keys as plaintext in source code
-- Apply multiple independent protection layers; do not rely on any single check
-- Keep security check signatures updated regularly
-- Log and report suspicious activity to a server-side endpoint
-- Obfuscate all strings that touch sensitive logic
-- Use server-side fingerprint validation for every session
-- Enable the critical process flag only during sensitive operations
-
----
-
-## Legal Notice
-
-This software is intended for protecting legitimate applications that you own or have explicit authorization to protect. Any use for unauthorized access, circumvention of third-party protections, or malicious purposes is strictly prohibited.
-
----
-
-## License
-
-MIT License. See [LICENSE](LICENSE) for details.
 
 ---
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/your-feature`)
-3. Commit your changes (`git commit -m 'Add your feature'`)
-4. Push to the branch (`git push origin feature/your-feature`)
-5. Open a Pull Request
+```bash
+# Before opening a PR:
+cl /std:c++17 /W4 /WX *.cpp /link    # zero warnings target
+```
 
-## Bug Reports
-
-Open an issue via [GitHub Issues](https://github.com/devc313/keyauth-protected-loader/issues). For security vulnerabilities, please report privately before public disclosure.
+- Keep each security module independent (`security.cpp` must not depend on `main.cpp`)
+- All new strings must use `CW_STR()` or `Security::SecureString<N>` — no raw literals in sensitive paths
+- Registry paths and keys must be defined as `SecureString`, never hardcoded plaintext
 
 ---
 
-## Contact
+## License
 
-- **GitHub**: [@devc313](https://github.com/devc313)
-- **Discord**: [Community Server](https://discord.gg/yourserver)
-- **Email**: your.email@example.com
+MIT — see [LICENSE](LICENSE).
+
+> **Disclaimer:** This template is intended solely for protecting applications **you own or have explicit authorization to protect**. Using it for unauthorized access or to circumvent third-party software protections is prohibited and may violate applicable law.
+
+---
+
+<div align="center">
+Built by <a href="https://github.com/devc313">devc313</a> &nbsp;·&nbsp; Discord: <code>ecvdxd98</code>
+</div>
