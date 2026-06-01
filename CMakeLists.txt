@@ -10,26 +10,39 @@ if(MSVC)
     add_link_options(/LTCG /OPT:REF /OPT:ICF)
 endif()
 
-# Add executable
-add_executable(ProtectedLoader main.cpp)
+# Add executable with all source files
+add_executable(ProtectedLoader 
+    main.cpp
+    console.cpp
+    security.cpp
+    ntp.cpp
+)
 
 # Link required libraries
 target_link_libraries(ProtectedLoader PRIVATE
     bcrypt
     winhttp
     ws2_32
+    crypt32
+    advapi32
+    ntdll
+    imagehlp
+    iphlpapi
 )
 
 # Set subsystem to Windows (no console)
 set_target_properties(ProtectedLoader PROPERTIES
-    WIN32_EXECUTABLE TRUE
+    WIN32_EXECUTABLE FALSE
     VS_DPI_AWARE "PerMonitor"
 )
 
-# Post-build event to strip debug info (optional)
-if(MSVC)
-    add_custom_command(TARGET ProtectedLoader POST_BUILD
-        COMMAND mt.exe -manifest \"${CMAKE_CURRENT_SOURCE_DIR}\\loader.manifest\" -outputresource:\"$<TARGET_FILE:ProtectedLoader>\"\;#1
-        COMMENT "Embedding manifest..."
-    )
-endif()
+# Include directories
+target_include_directories(ProtectedLoader PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
+# Post-build event to strip debug info (optional, comment out if manifest doesn't exist)
+# if(MSVC)
+#     add_custom_command(TARGET ProtectedLoader POST_BUILD
+#         COMMAND mt.exe -manifest \"${CMAKE_CURRENT_SOURCE_DIR}\\loader.manifest\" -outputresource:\"$<TARGET_FILE:ProtectedLoader>\"\;#1
+#         COMMENT "Embedding manifest..."
+#     )
+# endif()
