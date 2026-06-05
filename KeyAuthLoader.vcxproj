@@ -159,6 +159,7 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="ntp.cpp" />
     <ClCompile Include="security.cpp" />
+    <ClCompile Include="Project\Protection\AdvancedProtection.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="auth.hpp" />
@@ -167,6 +168,7 @@
     <ClInclude Include="security.hpp" />
     <ClInclude Include="skStr.h" />
     <ClInclude Include="utils.hpp" />
+    <ClInclude Include="Project\Protection\AdvancedProtection.h" />
   </ItemGroup>
   <ItemGroup>
     <Library Include="library_x64.lib" />

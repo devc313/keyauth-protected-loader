@@ -1,91 +1,14 @@
-#include "includes.hpp"
-#include "Project/Protection/AdvancedProtection.h"
-
 // ecvd @ cheatglobal
 // discord: ecvdxd98
 // incelemek isteyenler varsa diye yorum satırları ekledim normalde bu kadar yorum satırı kullanmam
 // koruma çok güçlü olmayabilir, paylaşım için basit bir şey yaptım
 // release x64 buildlemeniz gerekli
 
-
 // keyauth 1.3 api protected loader with advanced Fatality-inspired protections
 
-// konsol renkleri
-enum ConsoleColor {
-    BLACK = 0,
-    DARK_BLUE = 1,
-    DARK_GREEN = 2,
-    DARK_CYAN = 3,
-    DARK_RED = 4,
-    DARK_MAGENTA = 5,
-    DARK_YELLOW = 6,
-    GRAY = 7,
-    DARK_GRAY = 8,
-    BLUE = 9,
-    GREEN = 10,
-    CYAN = 11,
-    RED = 12,
-    MAGENTA = 13,
-    YELLOW = 14,
-    WHITE = 15
-};
-
-    // ascii
-const char* LOGO = R"(
-    :::    ::: :::::::::: :::   ::: :::    ::: :::    ::: ::::::::::: :::    :::
-    :+:   :+:  :+:        :+:   :+: :+:    :+: :+:    :+:     :+:     :+:    :+:
-    +:+  +:+   +:+         +:+ +:+  +:+    +:+ +:+    +:+     +:+     +:+    +:+
-    +#++:++    +#++:++#     +#++:   +#+    +:+ +#+    +:+     +#+     +#++:++#++
-    +#+  +#+   +#+           +#+    +#+    +#+ +#+    +#+     +#+     +#+    +#+
-    #+#   #+#  #+#           #+#    #+#    #+# #+#    #+#     #+#     #+#    #+#
-    ###    ### ##########    ###     ########   ########      ###     ###    ###
-
-                        [ KeyAuth Protected Loader ]
-)";
-
-// konsol renklerini ayarlamak için fonksiyon
-void SetConsoleColor(ConsoleColor foreground, ConsoleColor background = BLACK) {
-    HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
-    SetConsoleTextAttribute(hConsole, (background << 4) | foreground);
-}
-
-// konsol genişliğini ayarlamak için fonksiyon
-void SetConsoleSize() {
-    HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
-    SMALL_RECT windowSize = {0, 0, 79, 25}; // 80x26 karakter
-    COORD bufferSize = {80, 26};
-
-    SetConsoleWindowInfo(hConsole, TRUE, &windowSize);
-    SetConsoleScreenBufferSize(hConsole, bufferSize);
-}
-
-// dekoratif çizgi çizmek için fonksiyon
-void PrintLine(char symbol = '=', ConsoleColor color = CYAN) {
-    SetConsoleColor(color);
-    std::cout << std::string(80, symbol) << std::endl;
-    SetConsoleColor(WHITE);
-}
-
-// konsol başlığını ortalamak için fonksiyon
-void PrintCentered(const std::string& text, bool newLine = true) {
-    int padding = (80 - text.length()) / 2;
-    std::cout << std::string(padding, ' ') << text;
-    if (newLine) std::cout << std::endl;
-}
-
-// yükleme animasyonu
-void LoadingAnimation(const std::string& text, int duration_ms) {
-    const char* frames[] = { "|", "/", "-", "\\" };
-    int frame_count = sizeof(frames) / sizeof(frames[0]);
-    int frame_duration = 100;
-    int total_frames = duration_ms / frame_duration;
-
-    for (int i = 0; i < total_frames; i++) {
-        std::cout << "\r[" << frames[i % frame_count] << "] " << text;
-        Sleep(frame_duration);
-    }
-    std::cout << "\r[+] " << text << std::endl;
-}
+#include "includes.hpp"
+#include "Project/Protection/AdvancedProtection.h"
+#include "LicenseStorage.hpp"
 
 std::string tm_to_readable_time(tm ctx);
 static std::time_t string_to_timet(std::string timestamp);
@@ -96,162 +19,15 @@ void sessionStatus();
 
 using namespace KeyAuth;
 
-// hassas bilgileri şifrelenmiş olarak sakıyoruz
-namespace {
-    Security::SecureString<32> NAME("appname");
-    Security::SecureString<32> OWNERID("owneridhere");
-    Security::SecureString<32> VERSION("1.0");
-    Security::SecureString<64> URL("https://keyauth.win/api/1.3/");
-    Security::SecureString<32> PATH("");
-    Security::SecureString<32> REGISTRY_PATH("SOFTWARE\\KeyAuthLoader"); // kendi loaderinizin adını koyabilirsiniz lisans dosyada değilde registryde saklıyoruz
-    Security::SecureString<32> REGISTRY_KEY("License"); // registryde lisans keyini saklıyoruz
-}
-
-// registry işlemleri için fonksiyonlar - çok katmanlı şifreleme ile
-bool SaveLicenseToRegistry(const std::string& license) {
-    HKEY hKey;
-    char regPathBuffer[64] = {0};
-    char regKeyBuffer[32] = {0};
-    
-    // Secure string decryption to stack buffer
-    REGISTRY_PATH.decryptToStack(regPathBuffer, sizeof(regPathBuffer));
-    REGISTRY_KEY.decryptToStack(regKeyBuffer, sizeof(regKeyBuffer));
-    
-    std::string regPath(regPathBuffer);
-    std::string regKey(regKeyBuffer);
-    
-    // Secure wipe
-    Security::SecureZeroMemory(regPathBuffer, sizeof(regPathBuffer));
-    Security::SecureZeroMemory(regKeyBuffer, sizeof(regKeyBuffer));
-
-    LONG result = RegCreateKeyExA(HKEY_CURRENT_USER, regPath.c_str(), 0, NULL,
-        REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL);
-
-    if (result != ERROR_SUCCESS) {
-        return false;
-    }
-
-    // Çok katmanlı şifreleme + HMAC
-    std::string encryptedLicense = Security::MultiLayerEncrypt(license);
-    
-    // Base64 encode for registry storage
-    static const char* base64_chars = 
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    std::string base64Encoded;
-    base64Encoded.reserve(((encryptedLicense.size() + 2) / 3) * 4);
-    
-    for (size_t i = 0; i < encryptedLicense.size(); i += 3) {
-        uint32_t octet_a = i < encryptedLicense.size() ? (unsigned char)encryptedLicense[i] : 0;
-        uint32_t octet_b = i + 1 < encryptedLicense.size() ? (unsigned char)encryptedLicense[i+1] : 0;
-        uint32_t octet_c = i + 2 < encryptedLicense.size() ? (unsigned char)encryptedLicense[i+2] : 0;
-        
-        uint32_t triple = (octet_a << 16) + (octet_b << 8) + octet_c;
-        
-        base64Encoded += base64_chars[(triple >> 18) & 0x3F];
-        base64Encoded += base64_chars[(triple >> 12) & 0x3F];
-        base64Encoded += base64_chars[(triple >> 6) & 0x3F];
-        base64Encoded += base64_chars[triple & 0x3F];
-    }
-    
-    // Padding
-    size_t mod = encryptedLicense.size() % 3;
-    if (mod == 1) {
-        base64Encoded[base64Encoded.size()-2] = '=';
-        base64Encoded[base64Encoded.size()-1] = '=';
-    } else if (mod == 2) {
-        base64Encoded[base64Encoded.size()-1] = '=';
-    }
-
-    result = RegSetValueExA(hKey, regKey.c_str(), 0, REG_SZ,
-        (const BYTE*)base64Encoded.c_str(), base64Encoded.length() + 1);
-    RegCloseKey(hKey);
-
-    return result == ERROR_SUCCESS;
-}
-
-std::string GetLicenseFromRegistry() {
-    HKEY hKey;
-    char buffer[1024] = {0};
-    DWORD bufferSize = sizeof(buffer);
-    char regPathBuffer[64] = {0};
-    char regKeyBuffer[32] = {0};
-    
-    // Secure string decryption to stack buffer
-    REGISTRY_PATH.decryptToStack(regPathBuffer, sizeof(regPathBuffer));
-    REGISTRY_KEY.decryptToStack(regKeyBuffer, sizeof(regKeyBuffer));
-    
-    std::string regPath(regPathBuffer);
-    std::string regKey(regKeyBuffer);
-    
-    // Secure wipe
-    Security::SecureZeroMemory(regPathBuffer, sizeof(regPathBuffer));
-    Security::SecureZeroMemory(regKeyBuffer, sizeof(regKeyBuffer));
-
-    if (RegOpenKeyExA(HKEY_CURRENT_USER, regPath.c_str(), 0, KEY_READ, &hKey) != ERROR_SUCCESS) {
-        return "";
-    }
-
-    if (RegQueryValueExA(hKey, regKey.c_str(), NULL, NULL, (LPBYTE)buffer, &bufferSize) != ERROR_SUCCESS) {
-        RegCloseKey(hKey);
-        return "";
-    }
-
-    RegCloseKey(hKey);
-    
-    // Base64 decode
-    auto base64_decode = [](const std::string& input) -> std::string {
-        static const int decode_table[256] = {
-            -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
-            -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
-            -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,62,-1,-1,-1,63,
-            52,53,54,55,56,57,58,59,60,61,-1,-1,-1,-1,-1,-1,
-            -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13,14,
-            15,16,17,18,19,20,21,22,23,24,25,-1,-1,-1,-1,-1,
-            -1,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,
-            41,42,43,44,45,46,47,48,49,50,51,-1,-1,-1,-1,-1,
-            -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
-            -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
-            -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
-            -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
-            -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
-            -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
-            -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
-            -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1
-        };
-        
-        std::string output;
-        if (input.length() % 4 != 0) return "";
-        
-        size_t decoded_len = (input.length() / 4) * 3;
-        if (input[input.length()-1] == '=') decoded_len--;
-        if (input[input.length()-2] == '=') decoded_len--;
-        
-        output.reserve(decoded_len);
-        
-        for (size_t i = 0; i < input.length(); i += 4) {
-            uint32_t sextet_a = input[i] == '=' ? 0 : decode_table[static_cast<unsigned char>(input[i])];
-            uint32_t sextet_b = input[i+1] == '=' ? 0 : decode_table[static_cast<unsigned char>(input[i+1])];
-            uint32_t sextet_c = input[i+2] == '=' ? 0 : decode_table[static_cast<unsigned char>(input[i+2])];
-            uint32_t sextet_d = input[i+3] == '=' ? 0 : decode_table[static_cast<unsigned char>(input[i+3])];
-            
-            uint32_t triple = (sextet_a << 18) + (sextet_b << 12) + (sextet_c << 6) + sextet_d;
-            
-            output += static_cast<char>((triple >> 16) & 0xFF);
-            if (input[i+2] != '=') output += static_cast<char>((triple >> 8) & 0xFF);
-            if (input[i+3] != '=') output += static_cast<char>(triple & 0xFF);
-        }
-        
-        return output;
-    };
-    
-    std::string decodedBase64 = base64_decode(std::string(buffer));
-    
-    // Secure wipe
-    Security::SecureZeroMemory(buffer, sizeof(buffer));
-    
-    // Çok katmanlı şifre çözme + HMAC doğrulama
-    return Security::MultiLayerDecrypt(decodedBase64);
-}
+// hassas bilgileri şifrelenmiş olarak saklıyoruz
+// global namespace - LicenseStorage.hpp tarafından extern olarak kullanılıyor
+Security::SecureString<32> NAME("app name");
+Security::SecureString<32> OWNERID("ownerid");
+Security::SecureString<32> VERSION("1.0");
+Security::SecureString<64> URL("https://keyauth.win/api/1.3/");
+Security::SecureString<32> PATH("");
+Security::SecureString<32> REGISTRY_PATH("SOFTWARE\\KeyAuthLoader"); // kendi loaderinizin adını koyabilirsiniz
+Security::SecureString<32> REGISTRY_KEY("License"); // registryde lisans keyini saklıyoruz
 
 // keyauth api başlatma
 api KeyAuthApp(
@@ -261,258 +37,6 @@ api KeyAuthApp(
     URL.decrypt(),
     PATH.decrypt()
 );
-
-// anti-debug ve anti-dump fonksiyonları
-bool IsDebuggerPresentCheck() {
-    if (IsDebuggerPresent()) return true;
-
-    BOOL isDebugged = FALSE;
-    CheckRemoteDebuggerPresent(GetCurrentProcess(), &isDebugged);
-    return isDebugged;
-}
-
-bool CheckDebugRegisters() { // debug registerleri kontrol ediyoruz
-    CONTEXT ctx = {};
-    ctx.ContextFlags = CONTEXT_DEBUG_REGISTERS;
-
-    if (!GetThreadContext(GetCurrentThread(), &ctx)) return false;
-
-    return (ctx.Dr0 != 0 || ctx.Dr1 != 0 || ctx.Dr2 != 0 || ctx.Dr3 != 0);
-}
-
-bool CheckDebuggerTools() { // debugger araçlarını kontrol ediyoruz
-    const wchar_t* debuggerTools[] = {
-        CW_WSTR(L"ollydbg.exe").decrypt(), CW_WSTR(L"x64dbg.exe").decrypt(), CW_WSTR(L"x32dbg.exe").decrypt(),
-        CW_WSTR(L"ida64.exe").decrypt(), CW_WSTR(L"ida.exe").decrypt(), CW_WSTR(L"cheatengine-x86_64.exe").decrypt(),
-        CW_WSTR(L"HTTPDebuggerUI.exe").decrypt(), CW_WSTR(L"ProcessHacker.exe").decrypt(), CW_WSTR(L"procmon.exe").decrypt()
-    };
-
-    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-    if (snapshot == INVALID_HANDLE_VALUE) return false;
-
-    PROCESSENTRY32W pe32 = {sizeof(pe32)};
-    if (Process32FirstW(snapshot, &pe32)) {
-        do {
-            for (const auto& tool : debuggerTools) {
-                if (_wcsicmp(pe32.szExeFile, tool) == 0) {
-                    CloseHandle(snapshot);
-                    return true;
-                }
-            }
-        } while (Process32NextW(snapshot, &pe32));
-    }
-
-    CloseHandle(snapshot);
-    return false;
-}
-
-void AntiDump() { // bellek dökümünü engelleyen fonksiyon
-    DWORD oldProtect;
-    char* pBaseAddr = (char*)GetModuleHandle(NULL);
-    MEMORY_BASIC_INFORMATION mbi;
-    VirtualQuery(pBaseAddr, &mbi, sizeof(mbi));
-    VirtualProtect(pBaseAddr, mbi.RegionSize, PAGE_READONLY, &oldProtect);
-}
-
-// bellek koruma fonksiyonu
-void ProtectMemory() {
-    HANDLE process = GetCurrentProcess();
-    SYSTEM_INFO si;
-    GetSystemInfo(&si);
-
-    MEMORY_BASIC_INFORMATION mbi;
-    for (LPVOID addr = si.lpMinimumApplicationAddress;
-         addr < si.lpMaximumApplicationAddress;
-         addr = (LPBYTE)addr + mbi.RegionSize) {
-
-        if (VirtualQuery(addr, &mbi, sizeof(mbi))) {
-            if (mbi.State == MEM_COMMIT &&
-                (mbi.Type == MEM_PRIVATE || mbi.Type == MEM_IMAGE)) {
-                DWORD oldProtect;
-                VirtualProtect(addr, mbi.RegionSize, PAGE_NOACCESS, &oldProtect);
-            }
-        }
-    }
-}
-
-// güvenlik kontrolleri için ana fonksiyon
-bool SecurityCheck() {
-    if (IsDebuggerPresentCheck()) {
-        SetConsoleColor(RED);
-        auto dbgMsg = CW_STR_STACK("\n [-] Debugger detected!");
-        std::cout << dbgMsg.c_str();
-        SetConsoleColor(WHITE);
-        Sleep(1500);
-        exit(20);
-    }
-
-    if (CheckDebugRegisters()) {
-        SetConsoleColor(RED);
-        std::cout << "\n [-] Debug registers detected!";
-        SetConsoleColor(WHITE);
-        Sleep(1500);
-        exit(21);
-    }
-
-    if (CheckDebuggerTools()) {
-        SetConsoleColor(RED);
-        std::cout << "\n [-] Debugging tools detected!";
-        SetConsoleColor(WHITE);
-        Sleep(1500);
-        exit(22);
-    }
-
-    return true;
-}
-
-// AntiVM kontrolleri - gelişmiş versiyon Security namespace'inden kullanılıyor
-bool IsVirtualMachine() {
-    // cpuid ile sanallaştırma kontrolü
-    int cpuInfo[4] = {0};
-    char vendorID[13] = {0};
-
-    __cpuid(cpuInfo, 0);
-    // Güvenli kopyalama - memcpy_s kullanımı
-    memcpy_s(vendorID, sizeof(vendorID), &cpuInfo[1], 4);
-    memcpy_s(vendorID + 4, 4, &cpuInfo[3], 4);
-    memcpy_s(vendorID + 8, 4, &cpuInfo[2], 4);
-
-    if (strcmp(vendorID, "VMwareVMware") == 0 ||
-        strcmp(vendorID, "Microsoft Hv") == 0 ||
-        strcmp(vendorID, "VBoxVBoxVBox") == 0) {
-        return true;
-    }
-
-    // hypervisor bit kontrolü
-    __cpuid(cpuInfo, 1);
-    bool hypervisorPresent = (cpuInfo[2] & (1 << 31)) != 0;
-
-    if (!hypervisorPresent) {
-        return false;  // hypervisor yoksa kesinlikle vm değil
-    }
-
-    // vm servis kontrolü
-    HANDLE hDevice = CreateFileA("\\\\.\\VmGeneralPort",
-        GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (hDevice != INVALID_HANDLE_VALUE) {
-        CloseHandle(hDevice);
-        return true;
-    }
-
-    hDevice = CreateFileA("\\\\.\\VBoxMiniRdrDN",
-        GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (hDevice != INVALID_HANDLE_VALUE) {
-        CloseHandle(hDevice);
-        return true;
-    }
-
-    // mac adresi kontrolü
-    IP_ADAPTER_INFO adapterInfo[32];
-    DWORD dwBufLen = sizeof(adapterInfo);
-    if (GetAdaptersInfo(adapterInfo, &dwBufLen) == ERROR_SUCCESS) {
-        PIP_ADAPTER_INFO pAdapterInfo = adapterInfo;
-        while (pAdapterInfo) {
-            // vmware mac adresi kontrolü
-            if (pAdapterInfo->Address[0] == 0x00 &&
-                pAdapterInfo->Address[1] == 0x0C &&
-                pAdapterInfo->Address[2] == 0x29) {
-                return true;
-            }
-            // virtualBox mac adresi kontrolü
-            if (pAdapterInfo->Address[0] == 0x08 &&
-                pAdapterInfo->Address[1] == 0x00 &&
-                pAdapterInfo->Address[2] == 0x27) {
-                return true;
-            }
-            pAdapterInfo = pAdapterInfo->Next;
-        }
-    }
-
-    return false;  // vm yoksa false döner
-}
-
-// checksum hesaplama
-DWORD CalculateChecksum(const std::vector<BYTE>& data) {
-    DWORD checksum = 0;
-    for (size_t i = 0; i < data.size(); i++) {
-        checksum = ((checksum << 5) | (checksum >> 27)) + data[i];
-    }
-    return checksum;
-}
-
-// kod bütünlüğü kontrolü
-bool VerifyCodeIntegrity() {
-    HANDLE hProcess = GetCurrentProcess();
-    HMODULE hModule = GetModuleHandle(NULL);
-    if (!hModule) return true; // Modül alınamazsa kontrolü geç
-
-    MODULEINFO moduleInfo;
-    if (!GetModuleInformation(hProcess, hModule, &moduleInfo, sizeof(moduleInfo))) {
-        return true; // Modül bilgisi alınamazsa kontrolü geç
-    }
-
-    // PE Header kontrolü
-    PIMAGE_DOS_HEADER dosHeader = (PIMAGE_DOS_HEADER)hModule;
-    if (dosHeader->e_magic != IMAGE_DOS_SIGNATURE) {
-        return false;
-    }
-
-    PIMAGE_NT_HEADERS ntHeaders = (PIMAGE_NT_HEADERS)((BYTE*)hModule + dosHeader->e_lfanew);
-    if (ntHeaders->Signature != IMAGE_NT_SIGNATURE) {
-        return false;
-    }
-
-    // orijinal checksum kontrolü
-    DWORD originalChecksum = ntHeaders->OptionalHeader.CheckSum;
-    if (originalChecksum == 0) {
-        return true; // checksum yoksa kontrolü geç
-    }
-
-    // dosya checksum'ını hesapla
-    DWORD headerSum = 0;
-    DWORD checkSum = 0;
-    char* moduleBase = (char*)hModule;
-    if (MapFileAndCheckSumA(moduleBase, &headerSum, &checkSum) != CHECKSUM_SUCCESS) {
-        return true; // checksum hesaplanamazsa kontrolü geç
-    }
-
-    return true; // temel kontroller başarılı
-}
-
-// glişmiş güvenlik kontrolleri
-bool AdvancedSecurityCheck() {
-    // VM kontrolü
-    if (IsVirtualMachine()) {
-        SetConsoleColor(RED);
-        std::cout << "\n [-] Virtual machine detected!";
-        SetConsoleColor(WHITE);
-        Sleep(1500);
-        exit(30);
-    }
-
-    // kod bütünlüğü kontrolü
-    if (!VerifyCodeIntegrity()) {
-        SetConsoleColor(RED);
-        std::cout << "\n [-] Code integrity check failed!";
-        SetConsoleColor(WHITE);
-        Sleep(1500);
-        exit(31);
-    }
-
-    // zaman manipülasyonu kontrolü
-    static DWORD lastCheck = GetTickCount();
-    DWORD currentTime = GetTickCount();
-    if (currentTime < lastCheck) {
-        SetConsoleColor(RED);
-        std::cout << "\n [-] Time manipulation detected!";
-        SetConsoleColor(WHITE);
-        Sleep(1500);
-        exit(32);
-    }
-    lastCheck = currentTime;
-
-    return true;
-}
 
 // NTP zaman paketi yapısı
 #pragma pack(1)
@@ -605,13 +129,13 @@ int main()
 {
     // Initialize advanced protection system (Fatality-inspired)
     INIT_ADVANCED_PROTECTION();
-    
+
     // Enable critical process mode during initialization
     BEGIN_CRITICAL_SECTION();
-    
+
     // Capture environment fingerprint for server binding
     std::string sessionFingerprint = g_AdvancedProtection.GetSessionFingerprint();
-    
+
     // Security checks
     Security::AntiDump();
     if (!Security::SecurityCheck()) {
@@ -622,7 +146,7 @@ int main()
         END_CRITICAL_SECTION();
         exit(26);
     }
-    
+
     // Disable critical mode after sensitive init
     END_CRITICAL_SECTION();
 
@@ -631,26 +155,25 @@ int main()
     Console::LoadingAnimation("Checking time synchronization...", 1000);
 
     if (!NTP::CheckTimeSync()) {
-        Console::SetConsoleColor(Console::RED);
-        std::cout << "\n [-] System time is not synchronized!";
-        std::cout << "\n [-] Please enable automatic time synchronization in Windows settings.";
+        Console::SetConsoleColor(Console::YELLOW);
+        std::cout << "\n [!] System time sync check failed - continuing anyway.";
+        std::cout << "\n [!] Some features may not work correctly.";
         Console::SetConsoleColor(Console::WHITE);
-        Sleep(3000);
-        exit(33);
+        Sleep(2000);
     }
-
-    Console::SetConsoleColor(Console::GREEN);
-    std::cout << "\n [+] Time synchronization verified.";
-    Console::SetConsoleColor(Console::WHITE);
-    Sleep(1000);
+    else
+    {
+        Console::SetConsoleColor(Console::GREEN);
+        std::cout << "\n [+] Time synchronization verified.";
+        Console::SetConsoleColor(Console::WHITE);
+        Sleep(1000);
+    }
 
     // Periodic security and protection update thread
     std::thread securityThread([]() {
         while (true) {
-            // Update advanced protection system (checks environment, pending crashes, etc.)
             UPDATE_PROTECTION();
-            
-            // Traditional security checks
+
             if (!Security::SecurityCheck() || !Security::AdvancedSecurityCheck()) {
                 exit(25);
             }
@@ -662,9 +185,9 @@ int main()
     // konsol penceresini ayarla
     Console::SetConsoleSize();
 
-    // konsol arkaplan rengini ayarla - güvenli Win32 API kullanımı
+    // konsol arkaplan rengini ayarla
     HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
-    SetConsoleTextAttribute(hConsole, 0x0F); // color 0F equivalent
+    SetConsoleTextAttribute(hConsole, 0x0F);
 
     // konsol fontunu değiştir
     CONSOLE_FONT_INFOEX cfi;
@@ -677,8 +200,8 @@ int main()
     wcscpy_s(cfi.FaceName, L"Terminal");
     SetCurrentConsoleFontEx(GetStdHandle(STD_OUTPUT_HANDLE), FALSE, &cfi);
 
-    // logo ve başlık - güvenli cls komutu
-    system("cls"); // Güvenli: sadece console clear, command injection yok
+    // logo ve başlık
+    system("cls");
     Console::SetConsoleColor(Console::CYAN);
     std::cout << Console::LOGO << std::endl;
     Console::SetConsoleColor(Console::DARK_CYAN);
@@ -731,14 +254,6 @@ int main()
         exit(1);
     }
 
-    if (!KeyAuthApp.response.success) {
-        Console::SetConsoleColor(Console::RED);
-        std::cout << "\n [-] Invalid SSL certificate detected!";
-        Console::SetConsoleColor(Console::WHITE);
-        Sleep(1500);
-        exit(4);
-    }
-
     Console::SetConsoleColor(Console::DARK_CYAN);
     Console::LoadingAnimation("Performing security checks...", 1000);
 
@@ -748,14 +263,6 @@ int main()
         Console::SetConsoleColor(Console::WHITE);
         Sleep(1500);
         exit(6);
-    }
-
-    if (duration < 50 || duration > 5000) {
-        Console::SetConsoleColor(Console::RED);
-        std::cout << "\n [-] Suspicious response timing detected!";
-        Console::SetConsoleColor(Console::WHITE);
-        Sleep(1500);
-        exit(7);
     }
 
     if (KeyAuthApp.response.message.empty() || KeyAuthApp.response.message.length() < 10) {
@@ -833,7 +340,6 @@ int main()
         }
     }
 
-    std::thread run(checkAuthenticated, OWNERID.decrypt());
     std::thread check(sessionStatus);
 
     if (KeyAuthApp.user_data.username.empty()) exit(10);
@@ -847,7 +353,6 @@ int main()
             exit(10);
         }
 
-        // Güvenli console clear - hardcoded string, command injection yok
         system("cls");
         Console::SetConsoleColor(Console::CYAN);
         std::cout << Console::LOGO << std::endl;
@@ -880,7 +385,6 @@ int main()
                     break;
                 }
 
-                // Güvenli console clear - hardcoded string, command injection yok
                 system("cls");
                 Console::SetConsoleColor(Console::CYAN);
                 std::cout << Console::LOGO << std::endl;

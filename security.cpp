@@ -879,11 +879,31 @@ namespace Security {
     }
 
     void AntiDump() {
-        DWORD oldProtect;
-        char* pBaseAddr = (char*)GetModuleHandle(NULL);
-        MEMORY_BASIC_INFORMATION mbi;
-        VirtualQuery(pBaseAddr, &mbi, sizeof(mbi));
-        VirtualProtect(pBaseAddr, mbi.RegionSize, PAGE_READONLY, &oldProtect);
+        HMODULE hModule = GetModuleHandle(NULL);
+        if (!hModule) return;
+
+        char* pBaseAddr = (char*)hModule;
+        PIMAGE_DOS_HEADER dosHeader = (PIMAGE_DOS_HEADER)pBaseAddr;
+        if (dosHeader->e_magic != IMAGE_DOS_SIGNATURE) return;
+
+        PIMAGE_NT_HEADERS ntHeaders = (PIMAGE_NT_HEADERS)(pBaseAddr + dosHeader->e_lfanew);
+        if (ntHeaders->Signature != IMAGE_NT_SIGNATURE) return;
+
+        DWORD headersSize = ntHeaders->OptionalHeader.SizeOfHeaders;
+        if (headersSize == 0) {
+            headersSize = 0x1000;
+        }
+
+        DWORD pageSize = 0x1000;
+        DWORD protectSize = (headersSize + pageSize - 1) & ~(pageSize - 1);
+
+        DWORD oldProtect = 0;
+        if (!VirtualProtect(pBaseAddr, protectSize, PAGE_READONLY, &oldProtect)) {
+            return;
+        }
+
+        // eski protec'i geri almak isterseniz burada saklayabilirsiniz
+        (void)oldProtect;
     }
 
     void ProtectMemory() {
@@ -907,14 +927,17 @@ namespace Security {
     }
 
     bool IsVirtualMachine() {
-        // Use comprehensive VM detection methods
-        if (CPUIDHypervisorDetection()) return true;
-        if (RegistryArtifactCheck()) return true;
-        if (DriverPresenceCheck()) return true;
-        if (MACAddressCheck()) return true;
-        if (BIOSVendorCheck()) return true;
-        
+        // VM detection devre disi - gelistirme sirasinda VM/VMWare/Hyper-V uzerinde calisabilmek icin
+        // production'da tekrar acmak icin asagidaki satirlarin yorumunu kaldirin
         return false;
+
+        // Use comprehensive VM detection methods
+        // if (CPUIDHypervisorDetection()) return true;
+        // if (RegistryArtifactCheck()) return true;
+        // if (DriverPresenceCheck()) return true;
+        // if (MACAddressCheck()) return true;
+        // if (BIOSVendorCheck()) return true;
+        // return false;
     }
 
     // ========================================================================

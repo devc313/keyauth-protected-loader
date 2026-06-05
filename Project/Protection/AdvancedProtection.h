@@ -116,8 +116,8 @@ public:
     }
 };
 
-// Global protection instance
-static AdvancedProtection g_AdvancedProtection;
+// Global protection instance (declared in AdvancedProtection.cpp to avoid static init order issues)
+extern AdvancedProtection g_AdvancedProtection;
 
 // Initialization macro
 #define INIT_ADVANCED_PROTECTION() \
